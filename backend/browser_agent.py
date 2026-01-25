@@ -5,12 +5,16 @@ This module provides functionality to automatically search for products on Amazo
 and add them to cart based on natural language product intents.
 """
 # pyright: reportMissingImports=false
+import logging
 from browser_use import Agent, Browser, ChatOpenAI, ChatBrowserUse
 from models import CartResult, ProductIntent
 from dotenv import load_dotenv
 from typing import Optional
 
 load_dotenv()
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 # =========================================================
 # CONFIGURATION
@@ -41,16 +45,283 @@ MODEL_NAME = "gpt-4o-mini"
 
 def validate_intent(intent: ProductIntent) -> None:
     """Fail fast on invalid intent"""
+    logger.debug(f"Validating intent: product={intent.product}, constraints={intent.hard_constraints}")
+    
     if not intent.product or not intent.product.strip():
+        logger.error("Product name is required but was empty")
         raise ValueError("Product name is required")
 
     if intent.min_price and intent.max_price:
         if intent.min_price > intent.max_price:
+            logger.error(f"Invalid price range: min_price ({intent.min_price}) > max_price ({intent.max_price})")
             raise ValueError("min_price cannot exceed max_price")
 
     if intent.min_rating:
         if not (0 < intent.min_rating <= 5):
+            logger.error(f"Invalid rating: {intent.min_rating} (must be between 0 and 5)")
             raise ValueError("min_rating must be between 0 and 5")
+    
+    logger.info(f"Intent validated successfully: {intent.product}")
+
+
+# =========================================================
+# HELPER FUNCTIONS
+# =========================================================
+
+def is_sponsored(product: dict) -> bool:
+    """
+    Robust Amazon sponsored-product detection.
+    Designed for AI-driven browser automation.
+    
+    Args:
+        product: Dictionary containing product information with keys like:
+                - url: Product URL
+                - labels: Product labels/text
+                - aria_label: Accessibility label
+                - sponsoredLoggingUrl: Amazon ad tracking URL
+                - spAttributionURL: Sponsored attribution URL
+                - adId: Ad identifier
+                - clickTrackingParams: Click tracking parameters
+                - data_ad_id: Data attribute for ad ID
+                - data_ad: Data attribute for ad
+                - data_sponsored: Data attribute for sponsored status
+    
+    Returns:
+        True if product is sponsored, False otherwise
+    """
+    logger.debug(f"Checking if product is sponsored: {product.get('title', 'Unknown')[:50]}")
+    
+    # Normalize once
+    url = (product.get("url") or "").lower()
+    labels = (product.get("labels") or "").lower()
+    aria = (product.get("aria_label") or "").lower()
+
+    # 1️⃣ Explicit Amazon ad infrastructure (STRONGEST)
+    if (
+        product.get("sponsoredLoggingUrl")
+        or product.get("spAttributionURL")
+        or product.get("adId")
+        or product.get("clickTrackingParams")
+    ):
+        logger.debug("Product is sponsored: explicit ad infrastructure detected")
+        return True
+
+    # 2️⃣ URL patterns Amazon never uses for organic results
+    if any(pattern in url for pattern in SPONSORED_URL_PATTERNS):
+        logger.debug(f"Product is sponsored: URL pattern detected in {url[:100]}")
+        return True
+
+    # 3️⃣ DOM / metadata indicators
+    if (
+        product.get("data_ad_id")
+        or product.get("data_ad")
+        or product.get("data_sponsored")
+    ):
+        logger.debug("Product is sponsored: DOM/metadata indicators detected")
+        return True
+
+    # 4️⃣ Visible disclosure text
+    if "sponsored" in labels:
+        logger.debug("Product is sponsored: 'sponsored' text found in labels")
+        return True
+
+    # 5️⃣ Accessibility labels
+    if "sponsored" in aria:
+        logger.debug("Product is sponsored: 'sponsored' text found in aria label")
+        return True
+
+    logger.debug("Product is NOT sponsored")
+    return False
+
+
+def build_product_extraction_js(min_rating: Optional[float] = None) -> str:
+    """
+    Build JavaScript code to extract product information and check sponsored status from DOM elements.
+    
+    Args:
+        min_rating: Optional minimum rating to filter products (e.g., 4.0)
+    
+    Returns:
+        JavaScript code string with functions to check sponsored status and extract product info
+    """
+    logger.debug(f"Building product extraction JavaScript code with min_rating={min_rating}")
+    min_rating_js = str(min_rating) if min_rating is not None else "null"
+    return """
+    (function() {
+    // Check if a product card is sponsored
+    function isSponsored(card) {
+        if (!card || !card.querySelector) {
+            return false;
+        }
+        
+        // A. Ad-specific DOM attributes
+        if (card.querySelector('[data-ad-id], [data-sponsored], [data-ad-slot]')) {
+            return true;
+        }
+        
+        // B. Sponsored routing / tracking links
+        for (const a of card.querySelectorAll('a[href]')) {
+            const href = a.href || '';
+            if (
+                href.includes('/sspa/') ||
+                href.includes('/gp/slredirect/') ||
+                href.includes('sp_atk=') ||
+                href.includes('sp_csd=') ||
+                href.includes('sp_btf=')
+            ) {
+                return true;
+            }
+        }
+        
+        // C. Disclosure text (last line of defense)
+        if (card.innerText.toLowerCase().includes('sponsored')) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Extract price from product card
+    function extractPrice(card) {
+        const priceEl = card.querySelector('.a-price .a-offscreen');
+        if (!priceEl) return null;
+        
+        return parseInt(
+            priceEl.textContent.replace(/[₹,]/g, ''),
+            10
+        );
+    }
+    
+    // Extract rating from product card
+    function extractRating(card) {
+        const ratingEl = card.querySelector(
+            'i[data-cy="reviews-ratings-slot"] span.a-icon-alt'
+        );
+        
+        if (!ratingEl) {
+            // Fallback to other selectors
+            const fallbackEl = card.querySelector('.a-icon-alt, [aria-label*="stars"]');
+            if (!fallbackEl) return null;
+            const ratingText = fallbackEl.innerText || fallbackEl.getAttribute('aria-label') || '';
+            const match = ratingText.match(/([\\d.]+)\\s*out of\\s*5/i);
+            return match ? parseFloat(match[1]) : null;
+        }
+        
+        const match = ratingEl.textContent.match(/([\\d.]+)\\s*out of\\s*5/i);
+        return match ? parseFloat(match[1]) : null;
+    }
+    
+    // Extract product information from DOM element
+    function extractProduct(card) {
+        if (!card) {
+            return null;
+        }
+        
+        // Extract ASIN
+        const asin = card.getAttribute('data-asin') || null;
+        
+        // Extract title
+        const titleEl = card.querySelector('h2 span, h2 a span, .s-title-instructions-style span');
+        const title = titleEl?.innerText?.trim() || 
+                     card.querySelector('h2')?.innerText?.trim() || 
+                     null;
+        
+        // Extract price using extractPrice function
+        const price = extractPrice(card);
+        
+        // Extract rating using extractRating function
+        const rating = extractRating(card);
+        
+        // Extract URL
+        const linkEl = card.querySelector('a[href*="/dp/"], a[href*="/gp/product/"]');
+        let url = null;
+        if (linkEl) {
+            url = linkEl.href || linkEl.getAttribute('href');
+            // Make absolute if relative
+            if (url && url.startsWith('/')) {
+                url = 'https://www.amazon.in' + url;
+            }
+        }
+        
+        // Check sponsored status
+        const sponsored = isSponsored(card);
+        
+        return {
+            asin: asin,
+            title: title,
+            price: price,
+            rating: rating,
+            url: url,
+            sponsored: sponsored
+        };
+    }
+    
+    // Extract all products from search results page
+    function extractAllProducts() {
+        // Find all product cards using the most specific selector
+        const organicResults = Array.from(
+            document.querySelectorAll(
+                'div[role="listitem"][data-component-type="s-search-result"][data-asin]'
+            )
+        ).filter(card => !isSponsored(card));
+        
+        // Fallback: try other selectors if the main one doesn't work
+        let productElements = organicResults;
+        if (productElements.length === 0) {
+            const fallbackSelectors = [
+                '[data-component-type="s-search-result"][data-asin]',
+                '.s-result-item[data-asin]',
+                '[data-asin]:not([data-asin=""])'
+            ];
+            
+            for (const selector of fallbackSelectors) {
+                const elements = document.querySelectorAll(selector);
+                if (elements.length > 0) {
+                    productElements = Array.from(elements).filter(card => !isSponsored(card));
+                    break;
+                }
+            }
+        }
+        
+        // Extract product info from each element
+        const products = [];
+        for (const card of productElements) {
+            const product = extractProduct(card);
+            if (product && product.asin) {
+                products.push(product);
+            }
+        }
+        
+        // Filter by rating if min_rating is specified (after price check)
+        const minRating = {min_rating_js};
+        if (minRating !== null && minRating !== undefined) {{
+            const highRated = products.filter(product => {{
+                const rating = product.rating;
+                return rating !== null && rating >= minRating;
+            }});
+            return highRated;
+        }}
+        
+        return products;
+    }
+    
+    // Execute extraction immediately and return results
+    try {
+        const products = extractAllProducts();
+        return {
+            success: true,
+            products: products,
+            count: products.length
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            products: []
+        };
+    }
+    })();
+    """
 
 
 def fix_product_url(url: str) -> str:
@@ -58,7 +329,10 @@ def fix_product_url(url: str) -> str:
     Fix malformed Amazon product URLs.
     Handles relative URLs, incomplete URLs, and ensures proper domain.
     """
+    logger.debug(f"Fixing product URL: {url[:100]}")
+    
     if not url or not url.strip():
+        logger.error("URL is empty")
         raise ValueError("URL cannot be empty")
     
     url = url.strip()
@@ -74,11 +348,15 @@ def fix_product_url(url: str) -> str:
             parts = url.split("/dp/")
             if len(parts) > 1:
                 product_id = parts[1].split("/")[0].split("?")[0]
-                return f"{AMAZON_URL}/dp/{product_id}"
+                fixed_url = f"{AMAZON_URL}/dp/{product_id}"
+                logger.debug(f"Fixed URL by extracting product ID: {fixed_url}")
+                return fixed_url
     
     # If relative URL (starts with /)
     if url.startswith("/"):
-        return f"{AMAZON_URL}{url}"
+        fixed_url = f"{AMAZON_URL}{url}"
+        logger.debug(f"Fixed relative URL: {fixed_url}")
+        return fixed_url
     
     # If URL contains /dp/ but no domain
     if "/dp/" in url:
@@ -86,19 +364,26 @@ def fix_product_url(url: str) -> str:
         parts = url.split("/dp/")
         if len(parts) > 1:
             product_id = parts[1].split("/")[0].split("?")[0]
-            return f"{AMAZON_URL}/dp/{product_id}"
+            fixed_url = f"{AMAZON_URL}/dp/{product_id}"
+            logger.debug(f"Fixed URL by extracting product ID from /dp/: {fixed_url}")
+            return fixed_url
     
     # If it's just a product ID
     if url.startswith("B") and len(url) == 10:
-        return f"{AMAZON_URL}/dp/{url}"
+        fixed_url = f"{AMAZON_URL}/dp/{url}"
+        logger.debug(f"Fixed URL from product ID: {fixed_url}")
+        return fixed_url
     
     # Default: prepend Amazon domain
     if not url.startswith("http"):
         if url.startswith("/"):
-            return f"{AMAZON_URL}{url}"
+            fixed_url = f"{AMAZON_URL}{url}"
         else:
-            return f"{AMAZON_URL}/{url}"
+            fixed_url = f"{AMAZON_URL}/{url}"
+        logger.debug(f"Fixed URL by prepending domain: {fixed_url}")
+        return fixed_url
     
+    logger.debug(f"URL already valid: {url}")
     return url
 
 
@@ -132,6 +417,7 @@ def build_search_query(intent: ProductIntent, brand_override: Optional[str] = No
         intent: ProductIntent with search criteria
         brand_override: If provided, use this brand instead of intent brands (for multi-brand search)
     """
+    logger.debug(f"Building search query: product={intent.product}, brand_override={brand_override}")
     parts = [intent.product]
     
     # Add attributes to search (color, connectivity, type, etc.)
@@ -374,11 +660,15 @@ def build_search_query(intent: ProductIntent, brand_override: Optional[str] = No
     
 #     return js_code
 def build_price_slider_js(min_price: Optional[float], max_price: Optional[float]) -> Optional[str]:
+    logger.debug(f"Building price slider JS: min_price={min_price}, max_price={max_price}")
+    
     if min_price is None and max_price is None:
+        logger.debug("No price constraints, skipping slider JS")
         return None
 
     min_js = str(int(min_price)) if min_price is not None else "null"
     max_js = str(int(max_price)) if max_price is not None else "null"
+    logger.debug(f"Price slider JS generated: min={min_js}, max={max_js}")
 
     return f"""
 (function () {{
@@ -444,6 +734,7 @@ def build_filter_instructions(intent: ProductIntent) -> tuple[str, str, str, Opt
     Build filter instructions for price, rating, and discount.
     Returns (price_text, rating_text, discount_text, min_price, max_price)
     """
+    logger.debug("Building filter instructions from intent")
     price_text = ""
     rating_text = ""
     discount_text = ""
@@ -483,6 +774,7 @@ def build_filter_instructions(intent: ProductIntent) -> tuple[str, str, str, Opt
         else:
             discount_text = f"{min_discount}% Off or more"
     
+    logger.info(f"Filter instructions: price={price_text}, rating={rating_text}, discount={discount_text}, min_price={min_price}, max_price={max_price}")
     return price_text, rating_text, discount_text, min_price, max_price
 
 
@@ -562,12 +854,30 @@ def build_selection_rules(intent: ProductIntent, generic_mode: bool) -> str:
 # =========================================================
 
 def build_task(intent: ProductIntent) -> str:
+    logger.info("Building task instructions for agent...")
     validate_intent(intent)
 
     generic_mode = is_generic_intent(intent)
+    logger.debug(f"Generic mode: {generic_mode}")
     search_query = build_search_query(intent)
     price_text, rating_text, discount_text, min_price, max_price = build_filter_instructions(intent)
     selection_rules = build_selection_rules(intent, generic_mode)
+    logger.debug(f"Selection rules built: {len(selection_rules)} characters")
+    
+    # Get min_rating for JavaScript filtering
+    rating_constraint = intent.hard_constraints.get('rating', {})
+    min_rating = rating_constraint.get('min')
+    
+    # Extract key search terms for title validation
+    search_terms = search_query.lower().split()
+    # Remove common stop words that might cause false negatives
+    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'including', 'against', 'among', 'throughout', 'despite', 'towards', 'upon', 'concerning', 'to', 'of', 'in', 'for', 'on', 'at', 'by', 'with', 'from', 'up', 'about', 'into', 'through', 'during', 'including', 'against', 'among', 'throughout', 'despite', 'towards', 'upon', 'concerning'}
+    key_search_terms = [term for term in search_terms if term not in stop_words and len(term) > 2]
+    # Fallback to original search query if no key terms found
+    if not key_search_terms:
+        key_search_terms = search_terms[:3]  # Use first 3 terms as fallback
+    key_search_terms_str = ", ".join(f'"{term}"' for term in key_search_terms[:5])  # Limit to first 5 terms
+    logger.debug(f"Key search terms for title validation: {key_search_terms_str}")
     
     # Check for multiple preferred brands
     soft_brands = intent.soft_preferences.get('brands', [])
@@ -724,7 +1034,41 @@ FILTER VERIFICATION (after applying price filter):
 STEP 3 — EXTRACT PRODUCTS (AFTER FILTERS APPLIED)
 ==================================================
 
-After filters are applied, extract ALL visible products on screen using extract() action:
+After filters are applied, extract ALL visible products on screen.
+
+METHOD 1 (RECOMMENDED - DOM-based extraction):
+⚠️ CRITICAL: Use evaluate() action (NOT extract() action) with this JavaScript code:
+
+{build_product_extraction_js(min_rating)}
+
+❌ DO NOT use extract() action!
+✅ USE evaluate() action with the code parameter set to the JavaScript code above!
+
+This SINGLE evaluate() call will:
+1. Define all necessary functions (isSponsoredProduct, extractProduct, extractAllProducts)
+2. Automatically extract all products from the page
+3. Return a result object with success status and products array
+
+The result will have this structure (JavaScript object):
+- success: true or false
+- products: array of product objects
+- count: number of products found
+- error: error message (only if success is false)
+
+Each product object in the products array contains:
+   - asin: Product ASIN identifier
+   - title: Product name
+   - price: Numeric price value
+   - rating: Numeric rating value
+   - url: Full product URL
+   - sponsored: Boolean indicating if product is sponsored
+
+⚠️ CRITICAL: 
+- If the result.success is false, check result.error for the error message and use METHOD 2 (LLM extraction) as fallback.
+- If you get a JavaScript error, the functions might not be defined - make sure you're using evaluate() action, not extract() action!
+
+METHOD 2 (Fallback - LLM extraction):
+ONLY use this if METHOD 1 fails. Use extract() action:
 - Get products in DISPLAY ORDER (top to bottom)
 - For EACH product collect:
   - name (full product name)
@@ -747,15 +1091,33 @@ Process extracted products IN ORDER (top to bottom):
 FOR EACH PRODUCT (check systematically, one at a time):
 
 1. ❌ AVOID SPONSORED PRODUCTS (skip immediately):
+   
+   If you used METHOD 1 (DOM extraction) in STEP 3, check the result object:
+   - Access products: result.products (array of product objects)
+   - Each product has a 'sponsored' field already set
+   - If product.sponsored === true → SKIP to next product immediately
+   - DO NOT check price/rating for sponsored products
+   
+   If you used extract() action instead, check manually:
    - Has "Sponsored" label? → SKIP to next product
    - URL contains /sspa/ or sp_atk or sp_csd or sp_btf or sp_? → SKIP to next product
    - DO NOT check price/rating for sponsored products
    
 2. ✅ IF NON-SPONSORED, VERIFY ALL QUERY CONDITIONS:
    
+   FIRST: Check product title relevance (CRITICAL - PREVENTS WRONG PRODUCTS):
+   - ✓ Product title must contain key terms from search query: {key_search_terms_str}
+   - ✓ If title doesn't contain at least ONE key search term → SKIP immediately (wrong product type)
+   - Example: If searching for "protein bar", title must contain "protein" OR "bar" (or related terms like "protein", "bar", "snack")
+   - ❌ WRONG: "Electric Kettle" when searching for "protein bar" → SKIP (no match)
+   - ❌ WRONG: "Mouse" when searching for "keyboard" → SKIP (no match)
+   - ✅ CORRECT: "Protein Bar 20g" when searching for "protein bar" → Continue checking
+   
+   THEN: Check other conditions:
    {selection_rules}
    
    CHECK ALL CONDITIONS FROM QUERY:
+   - ✓ Title matches search query? (MUST PASS - see above)
    - ✓ Price within range? (if price constraint exists)
    - ✓ Rating meets minimum? (if rating constraint exists)
    - ✓ Discount meets minimum? (if discount constraint exists)
@@ -993,52 +1355,73 @@ async def run_browser_agent(intent: ProductIntent, use_browser_use_llm: bool = T
     Returns:
         CartResult with the added product or error information
     """
+    logger.info(f"Starting browser agent for product: {intent.product}")
+    logger.info(f"Intent details: {intent.hard_constraints}, {intent.soft_preferences}")
+    
     validate_intent(intent)
 
     # Choose LLM based on preference and API key availability
     import os
     if use_browser_use_llm and os.getenv('BROWSER_USE_API_KEY'):
+        logger.info("Using ChatBrowserUse LLM")
         llm = ChatBrowserUse()
     else:
+        logger.info(f"Using ChatOpenAI LLM with model: {MODEL_NAME}")
         llm = ChatOpenAI(model=MODEL_NAME)
 
+    logger.debug("Building task instructions...")
+    task = build_task(intent)
+    logger.debug(f"Task built, length: {len(task)} characters")
+    
+    logger.info("Creating agent with browser...")
     agent = Agent(
         browser=Browser(headless=False),
         llm=llm,
-        task=build_task(intent),
+        task=task,
         output_model_schema=CartResult,
         max_steps=MAX_AGENT_STEPS,
     )
 
+    logger.info(f"Running agent (max_steps={MAX_AGENT_STEPS})...")
     history = await agent.run()
+    logger.info(f"Agent completed. Steps taken: {history.number_of_steps()}")
 
     # Try to get structured output
+    logger.debug("Extracting result from agent history...")
     result = history.structured_output
     
     # Fallback: try to get structured output using the method
     if result is None:
+        logger.debug("No structured_output found, trying get_structured_output method...")
         result = history.get_structured_output(CartResult)
     
     # If still None, create a failure result
     if result is None:
+        logger.warning("No structured output found, attempting to extract from history...")
         # Check if task was completed successfully
         if history.is_done():
+            logger.info("Task marked as done, extracting final result...")
             # Task completed but no structured output - try to extract from final result
             final_result = history.final_result()
             if final_result:
                 try:
                     # Try to parse as JSON
                     import json
+                    logger.debug(f"Parsing final result as JSON: {final_result[:200]}")
                     data = json.loads(final_result)
                     result = CartResult(**data)
-                except (json.JSONDecodeError, Exception):
+                    logger.info("Successfully parsed CartResult from final result")
+                except (json.JSONDecodeError, Exception) as e:
+                    logger.warning(f"Failed to parse JSON from final result: {e}")
                     # If parsing fails, create a basic success result
                     result = CartResult(
                         success=True,
                         message="Product added to cart successfully",
                         items=[]
                     )
+                    logger.info("Created fallback success result")
             else:
+                logger.warning("Task done but no final result found")
                 result = CartResult(
                     success=False,
                     message="Task completed but no product information found",
@@ -1046,12 +1429,14 @@ async def run_browser_agent(intent: ProductIntent, use_browser_use_llm: bool = T
                 )
         else:
             # Task failed
+            logger.error("Task failed - agent did not complete successfully")
             errors = history.errors()
             error_msg = "Unknown error occurred"
             if errors:
                 error_list = [e for e in errors if e is not None]
                 if error_list:
                     error_msg = "; ".join(str(e) for e in error_list[:3])  # First 3 errors
+                    logger.error(f"Errors encountered: {error_msg}")
             
             result = CartResult(
                 success=False,
@@ -1059,4 +1444,12 @@ async def run_browser_agent(intent: ProductIntent, use_browser_use_llm: bool = T
                 items=[]
             )
 
+    # Log final result
+    if result.success:
+        logger.info(f"✅ Task completed successfully! Product: {result.product.name if result.product else 'N/A'}")
+        if result.product:
+            logger.info(f"   Price: ₹{result.product.price}, Rating: {result.product.rating}")
+    else:
+        logger.error(f"❌ Task failed: {result.message}")
+    
     return result
