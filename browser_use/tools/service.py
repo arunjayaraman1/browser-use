@@ -163,7 +163,7 @@ class Tools(Generic[Context]):
 				return ActionResult(error=f'Failed to search {params.engine} for "{params.query}": {str(e)}')
 
 		@self.registry.action(
-			'',
+			'Navigate to a URL. By default opens in the same tab (new_tab=False). Only set new_tab=True if explicitly needed.',
 			param_model=NavigateAction,
 		)
 		async def navigate(params: NavigateAction, browser_session: BrowserSession):

@@ -27,7 +27,7 @@ SearchAction = SearchAction
 
 class NavigateAction(BaseModel):
 	url: str
-	new_tab: bool = Field(default=False)
+	new_tab: bool = Field(default=False, description='Whether to open in a new tab. Default is False (same tab). Only set to True if explicitly needed.')
 
 
 # Backward compatibility alias

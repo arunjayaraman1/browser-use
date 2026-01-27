@@ -815,7 +815,8 @@ class BrowserSession(BaseModel):
 				if url.startswith('http') and current_url.startswith('http')
 				else False
 			)
-			timeout = 2.0 if same_domain else 4.0
+			
+			timeout = 5.0 if same_domain else 8.0
 
 		# Start performance tracking
 		nav_start_time = asyncio.get_event_loop().time()

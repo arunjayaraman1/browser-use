@@ -178,6 +178,20 @@ def setup_logging(stream=None, log_level=None, force_setup=False, debug_log_file
 	cdp_level_str = CONFIG.CDP_LOGGING_LEVEL.upper()
 	cdp_level = getattr(logging, cdp_level_str, logging.WARNING)
 
+	# Suppress harmless duplicate CDP response warnings from cdp_use.client
+	# These occur due to race conditions in CDP message handling and are safely ignored
+	class DuplicateResponseFilter(logging.Filter):
+		"""Filter to suppress duplicate CDP response warnings."""
+		def filter(self, record):
+			# Suppress WARNING level messages about duplicate responses
+			if record.levelno == logging.WARNING:
+				message = record.getMessage()
+				if 'duplicate response' in message.lower() or 'received duplicate response' in message.lower():
+					return False
+			return True
+	
+	duplicate_filter = DuplicateResponseFilter()
+
 	try:
 		from cdp_use.logging import setup_cdp_logging  # type: ignore
 
@@ -187,6 +201,9 @@ def setup_logging(stream=None, log_level=None, force_setup=False, debug_log_file
 			stream=stream or sys.stdout,
 			format_string='%(levelname)-8s [%(name)s] %(message)s' if log_type != 'result' else '%(message)s',
 		)
+		# Apply filter to cdp_use.client logger after setup
+		cdp_client_logger = logging.getLogger('cdp_use.client')
+		cdp_client_logger.addFilter(duplicate_filter)
 	except ImportError:
 		# If cdp_use doesn't have the new logging module, fall back to manual config
 		cdp_loggers = [
@@ -201,6 +218,10 @@ def setup_logging(stream=None, log_level=None, force_setup=False, debug_log_file
 			cdp_logger.setLevel(cdp_level)
 			cdp_logger.addHandler(console)
 			cdp_logger.propagate = False
+		
+		# Apply filter to cdp_use.client logger
+		cdp_client_logger = logging.getLogger('cdp_use.client')
+		cdp_client_logger.addFilter(duplicate_filter)
 
 	logger = logging.getLogger('browser_use')
 	# logger.debug('BrowserUse logging setup complete with level %s', log_type)
