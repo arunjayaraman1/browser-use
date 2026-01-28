@@ -26,6 +26,10 @@ if "task_id" not in st.session_state:
 	st.session_state.task_id = None
 if "task_status" not in st.session_state:
 	st.session_state.task_status = None
+if "list_task_id" not in st.session_state:
+	st.session_state.list_task_id = None
+if "list_task_status" not in st.session_state:
+	st.session_state.list_task_status = None
 
 
 def check_api_health() -> bool:
@@ -58,6 +62,27 @@ def start_agent_task(query: str) -> Optional[str]:
 		return None
 
 
+def start_list_task(query: str) -> Optional[str]:
+	"""Start a browser automation task to list products."""
+	try:
+		payload = {
+			"query": query,
+			"use_browser_use_llm": True
+		}
+		
+		response = requests.post(
+			f"{API_BASE_URL}/list-products",
+			json=payload,
+			timeout=10
+		)
+		response.raise_for_status()
+		data = response.json()
+		return data.get("task_id")
+	except Exception as e:
+		st.error(f"Error starting list task: {str(e)}")
+		return None
+
+
 def get_task_status(task_id: str) -> Optional[dict]:
 	"""Get the status of a running task."""
 	try:
@@ -69,6 +94,20 @@ def get_task_status(task_id: str) -> Optional[dict]:
 		return response.json()
 	except Exception as e:
 		st.error(f"Error getting task status: {str(e)}")
+		return None
+
+
+def get_list_task_status(task_id: str) -> Optional[dict]:
+	"""Get the status of a running list task."""
+	try:
+		response = requests.get(
+			f"{API_BASE_URL}/list-task/{task_id}",
+			timeout=5
+		)
+		response.raise_for_status()
+		return response.json()
+	except Exception as e:
+		st.error(f"Error getting list task status: {str(e)}")
 		return None
 
 
@@ -114,7 +153,13 @@ query = st.text_area(
 )
 
 # Run automation section
-run_button = st.button("🚀 Run Automation", use_container_width=True, type="primary")
+col1, col2 = st.columns(2)
+
+with col1:
+	run_button = st.button("🚀 Run Automation", use_container_width=True, type="primary")
+
+with col2:
+	show_list_button = st.button("📋 Show List", use_container_width=True, type="secondary")
 
 if run_button and query:
 	with st.spinner("Starting browser automation..."):
@@ -123,6 +168,15 @@ if run_button and query:
 			st.session_state.task_id = task_id
 			st.session_state.task_status = "running"
 			st.success(f"Task started! Task ID: {task_id}")
+			st.rerun()
+
+if show_list_button and query:
+	with st.spinner("Starting product listing..."):
+		task_id = start_list_task(query)
+		if task_id:
+			st.session_state.list_task_id = task_id
+			st.session_state.list_task_status = "running"
+			st.success(f"List task started! Task ID: {task_id}")
 			st.rerun()
 
 
@@ -181,6 +235,54 @@ def display_result(result: dict):
 		st.json(result)
 
 
+def display_list_result(result: dict):
+	"""Display the product list result."""
+	st.subheader("📋 Product List")
+	
+	success = result.get("success", False)
+	message = result.get("message", "No message")
+	count = result.get("count", 0)
+	products = result.get("products", [])
+	
+	if success and products:
+		st.success(f"✅ {message}")
+		st.info(f"Found {count} product(s) matching your criteria")
+		
+		# Display products in a grid
+		for idx, product in enumerate(products, 1):
+			with st.container():
+				col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+				
+				with col1:
+					st.write(f"**{idx}. {product.get('name', 'Unknown Product')}**")
+					url = product.get("url")
+					if url:
+						st.markdown(f"[🔗 View Product]({url})")
+				
+				with col2:
+					st.write("**Price:**")
+					price = product.get("price")
+					st.write(f"₹{price}" if price else "N/A")
+				
+				with col3:
+					st.write("**Rating:**")
+					rating = product.get("rating")
+					st.write(f"{rating} ⭐" if rating else "N/A")
+				
+				with col4:
+					st.write("")  # Spacer
+				
+				st.divider()
+	else:
+		st.warning(f"⚠️ {message}")
+		if not success:
+			st.error("Failed to retrieve products. Please try again.")
+	
+	# Show full result JSON
+	with st.expander("📄 Full Result JSON"):
+		st.json(result)
+
+
 # Task monitoring section
 if st.session_state.task_id:
 	st.header("🔄 Task Status")
@@ -215,6 +317,41 @@ if st.session_state.task_id:
 				display_result(result)
 	else:
 		st.warning("⚠️ Could not retrieve task status. The task may have been cleared.")
+
+# List task monitoring section
+if st.session_state.list_task_id:
+	st.header("📋 Product List Status")
+	
+	# Get current list task status
+	status_data = get_list_task_status(st.session_state.list_task_id)
+	
+	if status_data:
+		status = status_data.get("status", "unknown")
+		st.session_state.list_task_status = status
+		
+		# Display status
+		if status == "running":
+			st.info("🔄 Listing products...")
+			st.info("💡 This may take a minute. A browser window will open automatically.")
+			st.info("💡 You can refresh this page to check the status again.")
+			
+			# Auto-refresh button
+			if st.button("🔄 Refresh List Status"):
+				st.rerun()
+		elif status == "completed":
+			st.success("✅ Product list completed!")
+			
+			result = status_data.get("result")
+			if result:
+				display_list_result(result)
+		elif status == "failed":
+			st.error("❌ List task failed")
+			
+			result = status_data.get("result")
+			if result:
+				display_list_result(result)
+	else:
+		st.warning("⚠️ Could not retrieve list task status. The task may have been cleared.")
 
 # Footer
 st.divider()

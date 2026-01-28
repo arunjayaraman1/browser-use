@@ -1,7 +1,7 @@
 # pyright: reportMissingImports=false
 import logging
 from browser_use import Agent, Browser, ChatOpenAI, ChatBrowserUse
-from models import CartResult, ProductIntent
+from models import CartResult, ProductIntent, ProductListResult, ProductItem
 from dotenv import load_dotenv
 from typing import Optional
 
@@ -30,7 +30,7 @@ MAX_AGENT_STEPS = 40
 
 
 # MODEL_NAME = "gpt-4.1-mini"
-MODEL_NAME = "gpt-5"
+MODEL_NAME = "gpt-5.1"
 
 
 # =========================================================
@@ -606,494 +606,7 @@ def build_selection_rules(intent: ProductIntent, generic_mode: bool) -> str:
     return "\n".join(rules)
 
 
-# =========================================================
-# TASK BUILDER
-# =========================================================
 
-# def build_task(intent: ProductIntent) -> str:
-#     logger.info("Building task instructions for agent...")
-#     validate_intent(intent)
-
-#     generic_mode = is_generic_intent(intent)
-#     logger.debug(f"Generic mode: {generic_mode}")
-#     search_query = build_search_query(intent)
-#     price_text, rating_text, discount_text, min_price, max_price = build_filter_instructions(intent)
-#     selection_rules = build_selection_rules(intent, generic_mode)
-#     logger.debug(f"Selection rules built: {len(selection_rules)} characters")
-    
-#     # Get min_rating for JavaScript filtering
-#     rating_constraint = intent.hard_constraints.get('rating', {})
-#     min_rating = rating_constraint.get('min')
-    
-#     # Extract key search terms for title validation
-#     search_terms = search_query.lower().split()
-#     # Remove common stop words that might cause false negatives
-#     stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'including', 'against', 'among', 'throughout', 'despite', 'towards', 'upon', 'concerning', 'to', 'of', 'in', 'for', 'on', 'at', 'by', 'with', 'from', 'up', 'about', 'into', 'through', 'during', 'including', 'against', 'among', 'throughout', 'despite', 'towards', 'upon', 'concerning'}
-#     key_search_terms = [term for term in search_terms if term not in stop_words and len(term) > 2]
-#     # Fallback to original search query if no key terms found
-#     if not key_search_terms:
-#         key_search_terms = search_terms[:3]  # Use first 3 terms as fallback
-#     key_search_terms_str = ", ".join(f'"{term}"' for term in key_search_terms[:5])  # Limit to first 5 terms
-#     logger.debug(f"Key search terms for title validation: {key_search_terms_str}")
-    
-#     # Check for multiple preferred brands
-#     soft_brands = intent.soft_preferences.get('brands', [])
-#     has_multiple_brands = isinstance(soft_brands, list) and len(soft_brands) > 1
-#     brand_search_instructions = ""
-    
-#     if has_multiple_brands:
-#         brand_list = ", ".join(f"'{b}'" for b in soft_brands)
-#         brand_search_instructions = f"""
-# MULTI-BRAND SEARCH STRATEGY:
-# You have multiple preferred brands: {brand_list}
-
-# Try each brand ONE BY ONE:
-# 1. Search "{soft_brands[0]} {intent.product}" first
-# 2. Apply filters, scroll, extract products
-# 3. If valid non-sponsored product found → NAVIGATE to it → Add to cart → DONE
-# 4. If NO valid product found:
-#    - Go back to Amazon home
-#    - Search "{soft_brands[1] if len(soft_brands) > 1 else 'next'} {intent.product}"
-#    - Apply filters again
-#    - Extract products
-#    - If valid product found → NAVIGATE → Add to cart → DONE
-# {f'5. If still not found, try "{soft_brands[2]} {intent.product}"' if len(soft_brands) > 2 else ''}
-# {f'6. If no preferred brands work, search generic "{intent.product}"' if soft_brands else ''}
-
-# IMPORTANT:
-# - Try each brand separately with fresh search
-# - Only move to next brand if current brand has NO valid products
-# - Don't mix products from different brand searches
-# """
-#     else:
-#         brand_search_instructions = ""
-
-#     return f"""
-# You are a REAL HUMAN shopping on Amazon India.
-
-# ==================================================
-# ABSOLUTE RULES (NEVER BREAK)
-# ==================================================
-
-# 1. ❌ NO SPONSORED PRODUCTS
-#    - If label shows: Sponsored / Ad / Promoted → DISCARD
-#    - If URL contains any of:
-#      {", ".join(SPONSORED_URL_PATTERNS)}
-#      → DISCARD IMMEDIATELY
-
-# 2. 🛑 ADD TO CART EXACTLY ONCE
-#    - One click only
-#    - No retries
-#    - No alternatives
-
-# 3. 🎯 MODE
-#    - {"GENERIC MODE (flexible matching)" if generic_mode else "SPECIFIC MODE (match attributes + constraints)"}
-# {brand_search_instructions}
-# 4. 🚫 ANTI-HALLUCINATION RULES
-#    - ONLY use actions that exist: navigate, click, input, extract, scroll, wait, evaluate, done
-#    - DO NOT try to input() into elements that don't exist
-#    - DO NOT use element indices from extracted data - use URLs
-#    - After finding valid product → NAVIGATE to its URL immediately
-#    - DO NOT scroll indefinitely - max {MAX_SCROLL_ATTEMPTS} scrolls
-#    - If stuck → FAIL with clear error, don't loop
-#    - DO NOT try to sign in or provide credentials
-#    - DO NOT proceed to checkout/payment
-#    - Task ends at "Add to Cart" - nothing after that
-
-# ==================================================
-# STEP 1 — SEARCH
-# ==================================================
-
-# - Go to {AMAZON_URL}
-# - Wait 4–5 seconds
-# - Search for: "{search_query}"
-# - Press Enter
-# - Wait for results to load
-
-# ==================================================
-# STEP 2 — APPLY FILTERS FIRST (CRITICAL - DO THIS IMMEDIATELY AFTER SEARCH)
-# ==================================================
-
-# ⚠️ IMPORTANT: Apply filters BEFORE extracting products. This reduces irrelevant results!
-
-# Amazon has filters in the LEFT SIDEBAR. USE THEM FIRST - they improve results quality!
-
-# FILTER DISCOVERY:
-# - Scroll down LEFT sidebar to see all available filters
-# - Common filters: Price, Rating, Discount, Brand, Size, Color, etc.
-
-# FILTERS TO APPLY (in order):
-
-# 1. PRICE FILTER (if price constraint exists):
-# {f"   - Look for 'Price' section in left sidebar" if price_text else "   - Skip (no price constraint)"}
-# {f"   - Target filter: '{price_text}'" if price_text else ""}
-# {f"   - FILTER APPLICATION STRATEGY (try in this order):" if price_text else ""}
-# {f"     * METHOD 1 (RECOMMENDED - Direct DOM manipulation):" if price_text else ""}
-# {f"       Use evaluate() action with this JavaScript code to directly set price sliders:" if price_text else ""}
-# {f"       {build_price_slider_js(min_price, max_price) if build_price_slider_js(min_price, max_price) else ''}" if price_text else ""}
-# {f"       - This directly manipulates the price range sliders in the DOM" if price_text else ""}
-# {f"       - After executing, wait 3-4 seconds for results to update" if price_text else ""}
-# {f"       - VERIFY the filter was applied: Check the slider shows approximately ₹{int(min_price) if min_price else 'N/A'} – ₹{int(max_price) if max_price else 'N/A'}" if price_text else ""}
-# {f"       - If verification shows wrong range, try METHOD 2 (click filter buttons)" if price_text else ""}
-# {f"       - If this works correctly, skip to STEP 3 (extract products)" if price_text else ""}
-# {f"     * METHOD 2 (Fallback - Click filter buttons):" if price_text else ""}
-# {f"       - Try to find EXACT match: '{price_text}'" if price_text else ""}
-# {f"     * If exact match NOT found:" if price_text and max_price else ""}
-# {f"       - For 'Under ₹{int(max_price)}': Look for a range that INCLUDES or GOES UP TO ₹{int(max_price)}" if price_text and max_price else ""}
-# {f"       - Good options (in priority order):" if price_text and max_price else ""}
-# {f"         1. '₹200 - ₹{int(max_price)}' (if exists and {int(max_price)} >= 200)" if price_text and max_price and max_price >= 200 else ""}
-# {f"         2. '₹300 - ₹{int(max_price)}' (if exists and {int(max_price)} >= 300)" if price_text and max_price and max_price >= 300 else ""}
-# {f"         3. 'Up to ₹{int(max_price)}' (if exists)" if price_text and max_price else ""}
-# {f"         4. Any range ending at ₹{int(max_price)} or higher" if price_text and max_price else ""}
-# {f"       - CRITICAL: DO NOT pick a range with maximum LESS than ₹{int(max_price)}" if price_text and max_price else ""}
-# {f"       - ❌ WRONG EXAMPLES:" if price_text and max_price and max_price > 200 else ""}
-# {f"         * 'Up to ₹200' if you need 'Under ₹{int(max_price)}' (WRONG - too restrictive!)" if price_text and max_price and max_price > 200 else ""}
-# {f"         * 'Up to ₹{int(max_price // 2)}' if you need 'Under ₹{int(max_price)}' (WRONG!)" if price_text and max_price and max_price >= 400 else ""}
-# {f"     * If exact match NOT found:" if price_text and min_price and not max_price else ""}
-# {f"       - For 'Over ₹{int(min_price)}': Look for ranges starting from ₹{int(min_price)} or lower" if price_text and min_price and not max_price else ""}
-# {f"     * If range '{price_text.split('–')[0] if '–' in price_text else price_text} - {price_text.split('–')[1] if '–' in price_text else ''}' NOT found:" if price_text and min_price and max_price else ""}
-# {f"       - Look for range that includes both ₹{int(min_price)} and ₹{int(max_price)}" if price_text and min_price and max_price else ""}
-# {f"       - Or use 'Under ₹{int(max_price)}' if available" if price_text and min_price and max_price else ""}
-# {f"   - After selecting filter, wait 3-4 seconds for results to update" if price_text else ""}
-# {f"   - Verify filter applied correctly by checking URL or visible price ranges" if price_text else ""}
-
-# 2. RATING FILTER (if rating constraint exists):
-# {f"   - Look for 'Customer Review' or 'Avg. Customer Review' section" if rating_text else "   - Skip (no rating constraint)"}
-# {f"   - Click on: '{rating_text}' or '⭐⭐⭐⭐ & Up'" if rating_text else ""}
-# {f"   - Wait 3-4 seconds after applying" if rating_text else ""}
-
-# 3. DISCOUNT FILTER (if discount constraint exists):
-# {f"   - Look for 'Discount' or 'Offers' section in left sidebar" if discount_text else "   - Skip (no discount constraint)"}
-# {f"   - Scroll down sidebar if not visible initially" if discount_text else ""}
-# {f"   - Click on: '{discount_text}' or closest matching option" if discount_text else ""}
-# {f"   - Common options: '10% Off or more', '25% Off or more', '50% Off or more'" if discount_text else ""}
-# {f"   - Wait 3-4 seconds after applying" if discount_text else ""}
-
-# 4. ATTRIBUTE FILTERS (size, color, brand):
-# {f"   - SIZE: Look for 'Size' filter, select '{intent.attributes.get('size')}'" if intent.attributes.get('size') else "   - Skip size (not specified)"}
-# {f"   - COLOR: Look for 'Colour' filter, select '{intent.attributes.get('color')}'" if intent.attributes.get('color') else "   - Skip color (not specified)"}
-# {f"   - BRAND: Look for 'Brand' filter, select '{intent.hard_constraints.get('brand')}'" if intent.hard_constraints.get('brand') else "   - Skip brand filter (not a hard constraint)"}
-
-# FILTERING STRATEGY:
-# - Try each relevant filter (max {MAX_FILTER_ATTEMPTS} attempts per filter)
-# - If a filter is not visible, scroll down the LEFT sidebar
-# - If a filter doesn't work after {MAX_FILTER_ATTEMPTS} attempts → skip it and continue
-# - Filters significantly reduce irrelevant results - use them when possible!
-
-# FILTER VERIFICATION (after applying price filter):
-# {f"- Check if filter was applied correctly:" if price_text and max_price else ""}
-# {f"  * Look at URL - should contain price filter parameters" if price_text and max_price else ""}
-# {f"  * Check visible products - prices should be ≤ ₹{int(max_price)}" if price_text and max_price else ""}
-# {f"  * If wrong filter applied (e.g., 'Up to ₹200' instead of 'Under ₹{int(max_price)}'):" if price_text and max_price else ""}
-# {f"    - Clear the filter and try again with correct one" if price_text and max_price else ""}
-
-# ==================================================
-# STEP 3 — EXTRACT PRODUCTS (AFTER FILTERS APPLIED)
-# ==================================================
-
-# After filters are applied, extract ALL visible products on screen.
-
-# METHOD 1 (RECOMMENDED - DOM-based extraction):
-# ⚠️ CRITICAL: Use evaluate() action (NOT extract() action) with this JavaScript code:
-
-# {build_product_extraction_js(min_rating)}
-
-# ❌ DO NOT use extract() action!
-# ✅ USE evaluate() action with the code parameter set to the JavaScript code above!
-
-# This SINGLE evaluate() call will:
-# 1. Define all necessary functions (isSponsoredProduct, extractProduct, extractAllProducts)
-# 2. Automatically extract all products from the page
-# 3. Return a result object with success status and products array
-
-# The result will have this structure (JavaScript object):
-# - success: true or false
-# - products: array of product objects
-# - count: number of products found
-# - error: error message (only if success is false)
-
-# Each product object in the products array contains:
-#    - asin: Product ASIN identifier
-#    - title: Product name
-#    - price: Numeric price value
-#    - rating: Numeric rating value
-#    - url: Full product URL
-#    - sponsored: Boolean indicating if product is sponsored
-
-# ⚠️ CRITICAL: 
-# - If the result.success is false, check result.error for the error message and use METHOD 2 (LLM extraction) as fallback.
-# - If you get a JavaScript error, the functions might not be defined - make sure you're using evaluate() action, not extract() action!
-
-# METHOD 2 (Fallback - LLM extraction):
-# ONLY use this if METHOD 1 fails. Use extract() action:
-# - Get products in DISPLAY ORDER (top to bottom)
-# - For EACH product collect:
-#   - name (full product name)
-#   - price (numeric value only, e.g. 78, 149)
-#   - rating (numeric value, e.g. 4.0, 4.3)
-#   - sponsored status (check for "Sponsored" label)
-#   - FULL URL (must include /dp/ or product identifier)
-
-# EXTRACTION NOTES:
-# - Extract products AFTER filters are applied
-# - Get products in DISPLAY ORDER (top to bottom)
-# - Valid non-sponsored products may be visible already
-
-# ==================================================
-# STEP 4 — CHECK PRODUCTS (AVOID SPONSORED, VERIFY ALL CONDITIONS)
-# ==================================================
-
-# Process extracted products IN ORDER (top to bottom):
-
-# FOR EACH PRODUCT (check systematically, one at a time):
-
-# 1. ❌ AVOID SPONSORED PRODUCTS (skip immediately):
-   
-#    If you used METHOD 1 (DOM extraction) in STEP 3, check the result object:
-#    - Access products: result.products (array of product objects)
-#    - Each product has a 'sponsored' field already set
-#    - If product.sponsored === true → SKIP to next product immediately
-#    - DO NOT check price/rating for sponsored products
-   
-#    If you used extract() action instead, check manually:
-#    - Has "Sponsored" label? → SKIP to next product
-#    - URL contains /sspa/ or sp_atk or sp_csd or sp_btf or sp_? → SKIP to next product
-#    - DO NOT check price/rating for sponsored products
-   
-# 2. ✅ IF NON-SPONSORED, VERIFY ALL QUERY CONDITIONS:
-   
-#    FIRST: Check product title relevance (CRITICAL - PREVENTS WRONG PRODUCTS):
-#    - ✓ Product title must contain key terms from search query: {key_search_terms_str}
-#    - ✓ If title doesn't contain at least ONE key search term → SKIP immediately (wrong product type)
-#    - Example: If searching for "protein bar", title must contain "protein" OR "bar" (or related terms like "protein", "bar", "snack")
-#    - ❌ WRONG: "Electric Kettle" when searching for "protein bar" → SKIP (no match)
-#    - ❌ WRONG: "Mouse" when searching for "keyboard" → SKIP (no match)
-#    - ✅ CORRECT: "Protein Bar 20g" when searching for "protein bar" → Continue checking
-   
-#    THEN: Check other conditions:
-#    {selection_rules}
-   
-#    CHECK ALL CONDITIONS FROM QUERY:
-#    - ✓ Title matches search query? (MUST PASS - see above)
-#    - ✓ Price within range? (if price constraint exists)
-#    - ✓ Rating meets minimum? (if rating constraint exists)
-#    - ✓ Discount meets minimum? (if discount constraint exists)
-#    - ✓ Attributes match? (if attributes specified)
-#    - ✓ Brand matches? (if hard brand constraint exists)
-   
-#    ALL CONDITIONS MUST BE MET to select this product.
-   
-# 3. IF NON-SPONSORED + ALL CONDITIONS MET:
-#    - ✅ This is your product! 
-#    - ⚠️ IMPORTANT: REMEMBER this product's details:
-#      * Product name: [EXACT NAME FROM EXTRACTION]
-#      * Product price: [EXACT PRICE FROM EXTRACTION]
-#      * Product URL: [EXACT URL FROM EXTRACTION]
-#      * Product rating: [EXACT RATING FROM EXTRACTION if available]
-#    - You will need these details in STEP 6 to verify the product page matches
-#    - STOP checking other products
-#    - Proceed to STEP 5 (Open product page)
-   
-# 4. IF SPONSORED OR ANY CONDITION NOT MET:
-#    - ❌ Skip this product
-#    - Continue to next product in list
-
-# EXAMPLE FLOW (Query: "mouse under ₹100, rating 4+"):
-# Product 1: "Dell Mouse" - Sponsored ❌ → Skip (don't check price/rating)
-# Product 2: "HP Mouse ₹299, 4.5★" - Non-sponsored ✓, but price ₹299 > ₹100 ❌ → Skip
-# Product 3: "Logitech Mouse ₹89, 3.8★" - Non-sponsored ✓, price ₹89 < ₹100 ✓, but rating 3.8 < 4.0 ❌ → Skip
-# Product 4: "Generic Mouse ₹78, 4.2★" - Non-sponsored ✓, price ₹78 < ₹100 ✓, rating 4.2 ≥ 4.0 ✓ → SELECT THIS!
-# Stop checking, navigate to Product 4
-
-# AFTER CHECKING ALL VISIBLE PRODUCTS:
-# - If valid non-sponsored product found → Go to STEP 5 (Open product page)
-# - If NO valid product found → Go to STEP 4.1 (Scroll)
-
-# ==================================================
-# STEP 4.1 — SCROLL (ONLY IF NO VALID PRODUCT FOUND)
-# ==================================================
-
-# ONLY execute this if NO valid products found in visible area.
-
-# - Scroll down 1 full screen height
-# - Wait 2 seconds for new products to load
-# - Extract newly visible products
-# - Repeat STEP 4 (check each product sequentially for sponsored + conditions)
-
-# SCROLL LIMITS:
-# - Maximum {MAX_SCROLL_ATTEMPTS} scroll attempts
-# - If still no valid products after {MAX_SCROLL_ATTEMPTS} scrolls → FAIL with error
-
-# ==================================================
-# STEP 5 — OPEN PRODUCT PAGE
-# ==================================================
-
-# You have identified a valid non-sponsored product that meets ALL query conditions.
-
-# OPEN THE PRODUCT PAGE:
-
-# 1. GET THE PRODUCT URL from Step 4
-#    - Example: https://www.amazon.in/dp/B074N7X12P
-#    - URL must be complete and valid
-   
-# 2. ⚠️ CRITICAL: FIX THE URL BEFORE NAVIGATING
-#    - Check if URL starts with "http://" or "https://"
-#    - If NOT, it's a relative/incomplete URL - you MUST fix it:
-#      * If URL starts with "/" → prepend "https://www.amazon.in"
-#      * If URL contains "/dp/" but no domain → extract product ID and build: "https://www.amazon.in/dp/PRODUCT_ID"
-#      * If URL is just a product ID (starts with "B" and 10 chars) → build: "https://www.amazon.in/dp/PRODUCT_ID"
-#      * Always ensure URL format: "https://www.amazon.in/dp/BXXXXXXXXXX"
-   
-#    EXAMPLES OF URL FIXING:
-#    - "/dp/B074N7X12P" → "https://www.amazon.in/dp/B074N7X12P"
-#    - "MILTON-Stainless-Electric-Protection-Cool-touch/dp/B0G3PX33RC" → "https://www.amazon.in/dp/B0G3PX33RC"
-#    - "B0G3PX33RC" → "https://www.amazon.in/dp/B0G3PX33RC"
-#    - "https://MILTON-Stainless-Electric-Protection-Cool-touch/dp/B0G3PX33RC" → "https://www.amazon.in/dp/B0G3PX33RC"
-   
-#    URL FIXING LOGIC:
-#    - If URL has "https://" or "http://" but wrong domain → extract product ID from "/dp/PRODUCT_ID" and rebuild
-#    - If URL contains "/dp/" anywhere → extract the product ID (the part after "/dp/" before any "/" or "?")
-#    - Product ID format: starts with "B" followed by 9 alphanumeric characters (e.g., "B0G3PX33RC")
-#    - Final URL must be: "https://www.amazon.in/dp/PRODUCT_ID"
-   
-# 3. NAVIGATE to the FIXED URL:
-#    - Use navigate(url=FIXED_PRODUCT_URL) action
-#    - DO NOT navigate with malformed URLs
-#    - DO NOT try to click elements by index
-#    - DO NOT open new tabs
-   
-# 4. Wait 4-5 seconds for product page to load
-
-# 5. You should now be on the product detail page (/dp/ URL)
-
-# IMPORTANT:
-# - ALWAYS fix URLs before navigating - malformed URLs cause navigation failures (ERR_NAME_NOT_RESOLVED)
-# - Product is already verified (non-sponsored + meets all conditions)
-# - Just open the page - no additional checking needed
-
-# ==================================================
-# STEP 6 — VERIFY PRODUCT PAGE (CRITICAL - PREVENTS LOOPS)
-# ==================================================
-
-# You should now be on the product detail page (/dp/ URL).
-
-# ⚠️ CRITICAL: You MUST verify this is the CORRECT product that you selected in STEP 4!
-
-# VERIFICATION STEPS:
-
-# 1. BASIC PAGE CHECK:
-#    - Check current URL using evaluate: window.location.href
-#    - URL should contain /dp/ or /gp/aw/d/
-#    - Product page should load correctly (not error page)
-#    - If page didn't load → treat as "WRONG PRODUCT" and follow error handling below
-
-# 2. VERIFY PRODUCT MATCHES SELECTED PRODUCT:
-#    - Extract product details from current page using extract() action:
-#      * Extract product name (title/heading)
-#      * Extract product price
-#      * Extract product URL (from window.location.href)
-#      * Extract product rating (if visible)
-   
-#    - COMPARE with the product you selected in STEP 4:
-#      * Does the URL match (or contain the same product ID)?
-#      * Does the product name match (or is very similar)?
-#      * Does the price match (or is within reasonable range - prices can vary slightly)?
-   
-#    - ✅ IF PRODUCT MATCHES:
-#      * URL matches AND name matches → This is the correct product!
-#      * Proceed to STEP 7 (Add to cart)
-   
-#    - ❌ IF PRODUCT DOES NOT MATCH:
-#      * URL different OR name completely different → WRONG PRODUCT!
-#      * Treat as "WRONG PRODUCT" and follow error handling below
-
-# IF PAGE DIDN'T LOAD OR WRONG PRODUCT:
-#   ⚠️ CRITICAL: Follow these steps EXACTLY to avoid infinite loops:
-  
-#   1. Go BACK to search results using go_back() action
-#   2. Wait 2-3 seconds for page to load
-#   3. VERIFY you're on search results page:
-#      - Use evaluate: window.location.href to check URL
-#      - URL MUST contain /s?k= (search results pattern)
-#      - If URL still contains /dp/ → you're still on product page!
-   
-#   4. IF NOT ON SEARCH RESULTS (URL still has /dp/):
-#      - Navigate back again using go_back() one more time
-#      - OR navigate directly to search URL if you remember it
-#      - Wait 2-3 seconds
-#      - Verify URL contains /s?k= again
-   
-#   5. IF ON SEARCH RESULTS (URL contains /s?k=):
-#      - You already have extracted products from Step 3
-#      - DO NOT extract products again (this causes loops!)
-#      - Instead: Skip the current failed product
-#      - Try the NEXT product from your previously extracted list
-#      - Navigate to that product's URL
-#      - Repeat STEP 6 verification
-   
-#   6. IF ALL PRODUCTS FROM EXTRACTION FAILED:
-#      - Extract products again (only if on search results with /s?k=)
-#      - Check each product sequentially
-#      - Maximum 3 product attempts before failing
-
-# IMPORTANT ANTI-LOOP RULES:
-# - ❌ NEVER extract products if URL contains /dp/ (product page)
-# - ✅ ALWAYS verify URL contains /s?k= before extracting
-# - ✅ If you already extracted products, reuse that list
-# - ✅ Skip failed products and try next one
-# - ❌ Don't extract products repeatedly from same page
-
-# ==================================================
-# STEP 7 — ADD TO CART
-# ==================================================
-
-# ADD THE PRODUCT TO CART:
-
-# 1. Click "Add to Cart" button ONCE
-#    - Look for button with text "Add to Cart" or id="add-to-cart-button"
-#    - Click it exactly ONCE
-   
-# 2. Wait 4–5 seconds for confirmation
-
-# 3. Close any popups if shown:
-#    - Warranty/protection plan popups → Click "No thanks" or close
-#    - DO NOT click "Proceed to Buy" or "Go to Cart"
-
-# 🚫 ADD TO CART RULES:
-# - NEVER click "Add to Cart" on search/results pages
-# - ONLY add to cart on product detail page (/dp/ or /gp/aw/d/)
-# - Click exactly ONCE - no retries
-
-# ==================================================
-# STEP 8 — VERIFY ADDED & END TASK
-# ==================================================
-
-# VERIFY ITEM WAS ADDED by checking ANY of:
-# 1. "Added to Cart" confirmation message appears
-# 2. Cart icon shows count increased (e.g., "1" badge on cart)
-# 3. "Go to Cart" button visible
-# 4. Can see "Subtotal" or cart summary
-
-# IF VERIFICATION SUCCEEDS:
-# - Extract final product details (name, price, rating, URL)
-# - Use DONE action
-# - Return CartResult JSON with the product
-# - TASK COMPLETE - STOP HERE
-
-# IF SIGN-IN PAGE APPEARS:
-# - Task is ALREADY COMPLETE (item was added to cart)
-# - Don't try to sign in
-# - Don't fill any forms
-# - Just return the CartResult
-
-# FINAL RULES:
-# ❌ DO NOT click "Proceed to Buy" or "Proceed to Checkout"
-# ❌ DO NOT try to complete purchase
-# ❌ DO NOT fill in any forms or sign-in pages
-# ❌ DO NOT navigate to checkout/payment pages
-# ✅ After adding to cart → DONE immediately
-# ✅ After DONE → STOP (no retries, no additional actions)
-# """
 
 
 # =========================================================
@@ -1117,10 +630,24 @@ async def run_browser_agent(query_or_intent: str | ProductIntent, use_browser_us
         logger.info(f"Starting browser agent with query: {query_or_intent[:100]}...")
         # Try to extract price constraints from query (simple regex)
         import re
-        price_match = re.search(r'(?:under|below|max|upto|up to|less than)\s*[₹]?\s*(\d+)', query_or_intent.lower())
-        max_price = float(price_match.group(1)) if price_match else None
-        price_match_min = re.search(r'(?:over|above|min|more than|greater than)\s*[₹]?\s*(\d+)', query_or_intent.lower())
-        min_price = float(price_match_min.group(1)) if price_match_min else None
+
+        # First try to match "between X and Y" or "priced between X and Y" patterns
+        between_match = re.search(r'(?:priced\s+)?between\s+[₹]?\s*(\d+)\s+(?:and|to|-)\s+[₹]?\s*(\d+)', query_or_intent.lower())
+        if between_match:
+            min_price = float(between_match.group(1))
+            max_price = float(between_match.group(2))
+        else:
+            # Fallback to individual patterns - be specific to avoid matching rating patterns
+            # Only match if preceded by price-related keywords or ₹ symbol
+            price_match = re.search(r'(?:price[ds]?\s+)?(?:under|below|max|upto|up to|less than)\s+[₹]?\s*(\d+)', query_or_intent.lower())
+            max_price = float(price_match.group(1)) if price_match else None
+            # Only match if preceded by price-related keywords or ₹ symbol (not "rating above")
+            price_match_min = re.search(r'(?:price[ds]?\s+)?(?:over|above|min|more than|greater than)\s+[₹]?\s*(\d+)', query_or_intent.lower())
+            min_price = float(price_match_min.group(1)) if price_match_min else None
+        
+        # Extract rating constraints separately
+        rating_match = re.search(r'rating\s+(?:above|over|at least|>=|≥)\s*(\d+(?:\.\d+)?)', query_or_intent.lower())
+        min_rating = float(rating_match.group(1)) if rating_match else None
         
         # Build price slider JS if price constraints found
         price_slider_js = build_price_slider_js(min_price, max_price)
@@ -1135,6 +662,23 @@ PRICE FILTER (RECOMMENDED METHOD):
 - If sliders not found, fall back to clicking price filter buttons in the left sidebar
 """
         
+        # Build product extraction JavaScript
+        product_extraction_js = build_product_extraction_js(min_rating)
+        product_extraction_instructions = f"""
+PRODUCT EXTRACTION (CRITICAL - USE THIS METHOD):
+- ⚠️ DO NOT use extract() action - it returns empty results and causes navigation errors
+- ✅ ALWAYS use evaluate() action with this JavaScript code to extract products:
+{product_extraction_js}
+- This will return a result object with:
+  * success: true/false
+  * products: array of product objects with asin, title, price, rating, url, sponsored
+  * count: number of products found
+- After executing, check result.success and result.products
+- If result.success is false, check result.error and try again
+- Navigate to products using result.products[0].url (or first non-sponsored product)
+- ⚠️ NEVER navigate to "about:blank" - always use a valid product URL from the extraction result
+"""
+        
         # Build task string from the query
         task = f"""
 You are shopping on Amazon India. Your task is to:
@@ -1145,6 +689,7 @@ IMPORTANT RULES:
 - Go to https://www.amazon.in
 - Search for the product using the query above
 {price_filter_instructions}
+{product_extraction_instructions}
 - Find a first valid non-sponsored product that matches the requirements
 - Add it to cart only if it matches the requirements
 - ⚠️ CRITICAL: When navigating to product pages, ALWAYS use navigate(url="...", new_tab=False) to open in the SAME tab
@@ -1179,9 +724,11 @@ HANDLING EMPTY PAGES:
 - Return the product details when done and stop the task
 
 ANTI-LOOP RULES:
-- After extracting products, navigate to the FIRST valid product URL using navigate(url=url, new_tab=False)
+- After extracting products using evaluate(), navigate to the FIRST valid non-sponsored product URL using navigate(url=url, new_tab=False)
 - Wait 8-10 seconds after navigation before evaluating product page
 - If navigation fails or wrong product page loads, use go_back() ONCE, then try the NEXT product from your list
+- DO NOT use extract() action - it returns empty results and causes navigation errors
+- DO NOT navigate to "about:blank" - always use a valid product URL from evaluate() result
 - DO NOT extract products repeatedly from the same page
 - DO NOT navigate back and forth more than 2 times - if first 2 products fail, stop and report error
 - DO NOT refresh or go back if page is just loading slowly - be patient and wait
@@ -1265,9 +812,11 @@ HANDLING EMPTY PAGES:
 - Return the product details when done and stop the task
 
 ANTI-LOOP RULES:
-- After extracting products, navigate to the FIRST valid product URL using navigate(url=url, new_tab=False)
+- After extracting products using evaluate(), navigate to the FIRST valid non-sponsored product URL using navigate(url=url, new_tab=False)
 - Wait 8-10 seconds after navigation before evaluating product page
 - If navigation fails or wrong product page loads, use go_back() ONCE, then try the NEXT product from your list
+- DO NOT use extract() action - it returns empty results and causes navigation errors
+- DO NOT navigate to "about:blank" - always use a valid product URL from evaluate() result
 - DO NOT extract products repeatedly from the same page
 - DO NOT navigate back and forth more than 2 times - if first 2 products fail, stop and report error
 - DO NOT refresh or go back if page is just loading slowly - be patient and wait
@@ -1287,6 +836,19 @@ ANTI-LOOP RULES:
         logger.info(f"Using ChatOpenAI LLM with model: {MODEL_NAME}")
         llm = ChatOpenAI(model=MODEL_NAME)
     
+    # Setup fallback LLM to handle empty JSON errors
+    fallback_llm = None
+    if use_browser_use_llm and os.getenv('BROWSER_USE_API_KEY'):
+        # If primary is ChatBrowserUse, use ChatOpenAI as fallback
+        if os.getenv('OPENAI_API_KEY'):
+            fallback_llm = ChatOpenAI(model=MODEL_NAME)
+            logger.info(f"Fallback LLM: ChatOpenAI with model {MODEL_NAME}")
+    else:
+        # If primary is ChatOpenAI, use ChatBrowserUse as fallback
+        if os.getenv('BROWSER_USE_API_KEY'):
+            fallback_llm = ChatBrowserUse(timeout=180.0, max_retries=8, retry_max_delay=120.0)
+            logger.info("Fallback LLM: ChatBrowserUse")
+    
     logger.info("Creating agent with browser (high timeouts for slow pages and LLM calls)...")
     agent = Agent(
         browser=Browser(
@@ -1296,6 +858,7 @@ ANTI-LOOP RULES:
             wait_between_actions=2.0,  # Increased from 1.5 to 2.0
         ),
         llm=llm,
+        fallback_llm=fallback_llm,
         task=task,
         output_model_schema=CartResult,
         max_steps=MAX_AGENT_STEPS,
@@ -1373,5 +936,411 @@ ANTI-LOOP RULES:
             logger.info(f"   Price: ₹{result.product.price}, Rating: {result.product.rating}")
     else:
         logger.error(f"❌ Task failed: {result.message}")
+    
+    return result
+
+
+async def run_browser_agent_list(query_or_intent: str | ProductIntent, use_browser_use_llm: bool = True, max_products: int = 5) -> ProductListResult:
+    """
+    Run browser agent to extract and list filtered products (without adding to cart).
+    
+    Args:
+        query_or_intent: Either a string query (natural language) or ProductIntent object
+        use_browser_use_llm: If True, use ChatBrowserUse (recommended). 
+                           If False, use ChatOpenAI.
+        max_products: Maximum number of products to return (default: 5)
+    
+    Returns:
+        ProductListResult with the filtered products
+    """
+    # If it's a string, use it directly as the task
+    if isinstance(query_or_intent, str):
+        logger.info(f"Starting browser agent list with query: {query_or_intent[:100]}...")
+        # Try to extract price constraints from query (simple regex)
+        import re
+
+        # First try to match "between X and Y" or "priced between X and Y" patterns
+        between_match = re.search(r'(?:priced\s+)?between\s+[₹]?\s*(\d+)\s+(?:and|to|-)\s+[₹]?\s*(\d+)', query_or_intent.lower())
+        if between_match:
+            min_price = float(between_match.group(1))
+            max_price = float(between_match.group(2))
+        else:
+            # Fallback to individual patterns
+            price_match = re.search(r'(?:price[ds]?\s+)?(?:under|below|max|upto|up to|less than)\s+[₹]?\s*(\d+)', query_or_intent.lower())
+            max_price = float(price_match.group(1)) if price_match else None
+            price_match_min = re.search(r'(?:price[ds]?\s+)?(?:over|above|min|more than|greater than)\s+[₹]?\s*(\d+)', query_or_intent.lower())
+            min_price = float(price_match_min.group(1)) if price_match_min else None
+        
+        # Extract rating constraints separately
+        rating_match = re.search(r'rating\s+(?:above|over|at least|>=|≥)\s*(\d+(?:\.\d+)?)', query_or_intent.lower())
+        min_rating = float(rating_match.group(1)) if rating_match else None
+        
+        # Build price slider JS if price constraints found
+        price_slider_js = build_price_slider_js(min_price, max_price)
+        price_filter_instructions = ""
+        if price_slider_js:
+            price_filter_instructions = f"""
+PRICE FILTER (RECOMMENDED METHOD):
+- After searching, use the evaluate() action with this JavaScript code to set price filters:
+{price_slider_js}
+- Wait 5-8 seconds after executing for results to update
+- Verify the filter was applied by checking visible product prices
+- If sliders not found, fall back to clicking price filter buttons in the left sidebar
+"""
+        
+        # Build product extraction JavaScript
+        product_extraction_js = build_product_extraction_js(min_rating)
+        
+        # Build task string from the query
+        task = f"""
+You are shopping on Amazon India. Your task is to:
+
+Find and list the first {max_products} products that match: {query_or_intent}
+
+IMPORTANT RULES:
+- Go to https://www.amazon.in
+- Search for the product using the query above
+{price_filter_instructions}
+- After searching and applying filters, use the evaluate() action with this JavaScript code to extract products:
+{product_extraction_js}
+- This will return a result object with:
+  * success: true/false
+  * products: array of product objects with asin, title, price, rating, url, sponsored
+  * count: number of products found
+- Extract the first {max_products} non-sponsored products that match the requirements
+- ⚠️ DO NOT add products to cart - only extract and list them
+- ⚠️ DO NOT navigate to product pages - stay on the search results page
+- Return the product list when done and stop the task
+
+PAGE LOADING PATIENCE (CRITICAL):
+- ⚠️ Amazon pages can take 5-10 seconds to fully load, especially search results
+- ⚠️ DO NOT evaluate pages as "empty" or "blank" immediately after navigation
+- ⚠️ ALWAYS wait at least 5-8 seconds after navigation before evaluating page state
+- ⚠️ Check the DOM content and browser_state, not just visual appearance
+
+HANDLING EMPTY PAGES:
+- If search results page appears empty after applying price filter:
+  1. Wait 10-15 seconds FIRST - Amazon pages load slowly
+  2. Check browser_state and DOM content - if products are listed there, page IS loaded
+  3. Only if truly empty after 15 seconds: Try refreshing the page
+  4. If still empty, try search WITHOUT price filter first to verify products exist
+- Only Non Sponsored products should be included in the list
+- Return the first {max_products} products that satisfy the conditions
+"""
+    else:
+        # It's a ProductIntent object
+        intent = query_or_intent
+        logger.info(f"Starting browser agent list for product: {intent.product}")
+        
+        validate_intent(intent)
+        search_query = build_search_query(intent)
+        selection_rules = build_selection_rules(intent, is_generic_intent(intent))
+        
+        # Get price constraints for price slider JS
+        price_constraint = intent.hard_constraints.get('price', {})
+        min_price = price_constraint.get('min')
+        max_price = price_constraint.get('max')
+        price_slider_js = build_price_slider_js(min_price, max_price)
+        
+        # Get rating constraint
+        rating_constraint = intent.hard_constraints.get('rating', {})
+        min_rating = rating_constraint.get('min')
+        product_extraction_js = build_product_extraction_js(min_rating)
+        
+        # Build price filter instructions
+        price_filter_instructions = ""
+        if price_slider_js:
+            price_filter_instructions = f"""
+PRICE FILTER (RECOMMENDED METHOD):
+- After searching, use the evaluate() action with this JavaScript code to set price filters:
+{price_slider_js}
+- Wait 5-8 seconds after executing for results to update
+- Verify the filter was applied by checking visible product prices
+- If sliders not found (returns success: false), fall back to clicking price filter buttons in the left sidebar
+"""
+        
+        task = f"""
+You are shopping on Amazon India. Your task is to:
+
+Find and list the first {max_products} products that match: {intent.product}
+
+SEARCH QUERY: {search_query}
+
+SELECTION RULES:
+{selection_rules}
+
+IMPORTANT RULES:
+- Go to https://www.amazon.in
+- Search for the product using the search query above
+{price_filter_instructions}
+- After searching and applying filters, use the evaluate() action with this JavaScript code to extract products:
+{product_extraction_js}
+- This will return a result object with:
+  * success: true/false
+  * products: array of product objects with asin, title, price, rating, url, sponsored
+  * count: number of products found
+- Extract the first {max_products} non-sponsored products that match the requirements
+- ⚠️ DO NOT add products to cart - only extract and list them
+- ⚠️ DO NOT navigate to product pages - stay on the search results page
+- Return the product list when done and stop the task
+
+PAGE LOADING PATIENCE (CRITICAL):
+- ⚠️ Amazon pages can take 5-10 seconds to fully load, especially search results
+- ⚠️ DO NOT evaluate pages as "empty" or "blank" immediately after navigation
+- ⚠️ ALWAYS wait at least 5-8 seconds after navigation before evaluating page state
+- ⚠️ Check the DOM content and browser_state, not just visual appearance
+
+HANDLING EMPTY PAGES:
+- If search results page appears empty after applying price filter:
+  1. Wait 10-15 seconds FIRST - Amazon pages load slowly
+  2. Check browser_state and DOM content - if products are listed there, page IS loaded
+  3. Only if truly empty after 15 seconds: Try refreshing the page
+  4. If still empty, try search WITHOUT price filter first to verify products exist
+- Only Non Sponsored products should be included in the list
+- Return the first {max_products} products that satisfy the conditions
+"""
+        logger.debug(f"Task built, length: {len(task)} characters")
+
+    # Choose LLM based on preference and API key availability
+    import os
+    if use_browser_use_llm and os.getenv('BROWSER_USE_API_KEY'):
+        logger.info("Using ChatBrowserUse LLM")
+        llm = ChatBrowserUse(
+            timeout=180.0,
+            max_retries=8,
+            retry_max_delay=120.0,
+        )
+    else:
+        logger.info(f"Using ChatOpenAI LLM with model: {MODEL_NAME}")
+        llm = ChatOpenAI(model=MODEL_NAME)
+    
+    # Setup fallback LLM
+    fallback_llm = None
+    if use_browser_use_llm and os.getenv('BROWSER_USE_API_KEY'):
+        if os.getenv('OPENAI_API_KEY'):
+            fallback_llm = ChatOpenAI(model=MODEL_NAME)
+            logger.info(f"Fallback LLM: ChatOpenAI with model {MODEL_NAME}")
+    else:
+        if os.getenv('BROWSER_USE_API_KEY'):
+            fallback_llm = ChatBrowserUse(timeout=180.0, max_retries=8, retry_max_delay=120.0)
+            logger.info("Fallback LLM: ChatBrowserUse")
+    
+    logger.info("Creating agent with browser for product listing...")
+    agent = Agent(
+        browser=Browser(
+            headless=False,
+            minimum_wait_page_load_time=3.0,
+            wait_for_network_idle_page_load_time=8.0,
+            wait_between_actions=2.0,
+        ),
+        llm=llm,
+        fallback_llm=fallback_llm,
+        task=task,
+        max_steps=MAX_AGENT_STEPS,
+        llm_timeout=180,
+        step_timeout=300,
+        max_failures=5,
+    )
+
+    logger.info(f"Running agent for product listing (max_steps={MAX_AGENT_STEPS})...")
+    history = await agent.run()
+    logger.info(f"Agent completed. Steps taken: {history.number_of_steps()}")
+
+    # Extract products from agent history
+    logger.debug("Extracting products from agent history...")
+    products = []
+    
+    # Try to extract products from the final result or history
+    final_result = history.final_result()
+    if final_result and not products:
+        try:
+            import json
+            import re
+            # Try to parse as JSON first
+            data = None
+            if isinstance(final_result, str):
+                try:
+                    data = json.loads(final_result)
+                except json.JSONDecodeError:
+                    # Try to find JSON object in text
+                    json_match = re.search(r'\{[^{}]*"products"[^{}]*\[.*?\][^{}]*\}', final_result, re.DOTALL)
+                    if json_match:
+                        try:
+                            data = json.loads(json_match.group(0))
+                        except json.JSONDecodeError:
+                            pass
+            else:
+                data = final_result
+            
+            # Check if it's a product list result in JSON format
+            if isinstance(data, dict) and 'products' in data:
+                product_list = data['products'][:max_products]
+                for p in product_list:
+                    if not p.get('sponsored', False) and p.get('asin'):
+                        url = p.get('url', '')
+                        if url:
+                            try:
+                                url = fix_product_url(url)
+                            except Exception:
+                                pass
+                        products.append(ProductItem(
+                            name=p.get('title', 'Unknown'),
+                            price=p.get('price'),
+                            rating=p.get('rating'),
+                            url=url
+                        ))
+            elif isinstance(final_result, str):
+                # Try parsing formatted text (fallback)
+                logger.debug("Trying to parse formatted text from final result...")
+                # Pattern to match product entries in formatted text
+                # Accepts both `1)` / `1.` numbering, quoted or unquoted Title,
+                # and Sponsored as yes/no/true/false (any case).
+                product_pattern = (
+                    r'(?:^|\n)\s*'                # line start
+                    r'(\d+)[\)\.]'                # 1) or 1.
+                    r'\s+([^\n]+?)\s*'            # product heading line
+                    r'\n-\s*ASIN:\s*([A-Z0-9]+)\s*'
+                    # Title: optional quotes -> capture inner or whole line
+                    r'\n-\s*Title:\s*(?:"([^"\n]+)"|([^\n]+))\s*'
+                    r'\n-\s*Price:\s*₹?(\d+)\s*'
+                    r'\n-\s*Rating:\s*([\d.]+)\s*out of 5\s*'
+                    r'\n-\s*URL:\s*([^\s\n]+)\s*'
+                    r'\n-\s*Sponsored:\s*(\w+)\s*'
+                )
+                matches = list(re.finditer(product_pattern, final_result, re.MULTILINE))
+                logger.debug(f"Regex found {len(matches)} product matches in final result")
+                
+                for match_idx, match in enumerate(matches):
+                    try:
+                        product_name = match.group(2).strip()
+                        asin = match.group(3)
+                        # Title: prefer quoted group, else unquoted
+                        title = (match.group(4) or match.group(5) or "").strip()
+                        price_str = match.group(6)
+                        rating_str = match.group(7)
+                        url = match.group(8)
+                        sponsored_str = (match.group(9) or "").strip().lower()
+                        
+                        logger.debug(f"Match {match_idx + 1}: title={title[:50]}, price={price_str}, rating={rating_str}, sponsored={sponsored_str}")
+                        
+                        # Skip if sponsored (true/yes)
+                        if sponsored_str in ('yes', 'true'):
+                            logger.debug(f"Skipping sponsored product: {title[:50]}")
+                            continue
+                        
+                        price = float(price_str) if price_str else None
+                        rating = float(rating_str) if rating_str else None
+                        
+                        # Fix URL if needed
+                        if url:
+                            try:
+                                url = fix_product_url(url)
+                            except Exception:
+                                pass
+                        
+                        product_item = ProductItem(
+                            name=title or product_name,
+                            price=price,
+                            rating=rating,
+                            url=url
+                        )
+                        products.append(product_item)
+                        logger.info(f"✅ Extracted product {len(products)}: {title[:50]} - ₹{price}, {rating}⭐")
+                    except Exception as e:
+                        logger.warning(f"Failed to parse product from match {match_idx + 1}: {e}")
+                        import traceback
+                        logger.debug(traceback.format_exc())
+                        continue
+                
+                if products:
+                    logger.info(f"✅ Successfully parsed {len(products)} products from formatted text")
+                else:
+                    logger.warning(f"⚠️ Regex found {len(matches)} matches but no products were added")
+        except Exception as e:
+            logger.warning(f"Failed to parse products from final result: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+    
+    # Also check action results for product extraction (more reliable - from evaluate() action)
+    if not products:
+        action_results = history.action_results()
+        logger.debug(f"Checking {len(action_results)} action results for products...")
+        for idx, action_result in enumerate(action_results):
+            if action_result and action_result.extracted_content:
+                try:
+                    import json
+                    content = action_result.extracted_content
+                    logger.debug(f"Action result {idx}: type={type(content)}, preview={str(content)[:200] if content else 'None'}")
+                    
+                    data = None
+                    if isinstance(content, str):
+                        try:
+                            data = json.loads(content)
+                        except json.JSONDecodeError:
+                            # Try brace matching for nested JSON
+                            brace_start = content.find('{')
+                            if brace_start != -1:
+                                brace_count = 0
+                                for i in range(brace_start, len(content)):
+                                    if content[i] == '{':
+                                        brace_count += 1
+                                    elif content[i] == '}':
+                                        brace_count -= 1
+                                        if brace_count == 0:
+                                            json_str = content[brace_start:i+1]
+                                            try:
+                                                data = json.loads(json_str)
+                                                logger.debug(f"Parsed JSON using brace matching")
+                                                break
+                                            except json.JSONDecodeError:
+                                                pass
+                    elif isinstance(content, (dict, list)):
+                        data = content
+                    
+                    if isinstance(data, dict) and 'products' in data and isinstance(data['products'], list):
+                        logger.info(f"Found {len(data['products'])} products in action result {idx}")
+                        product_list = data['products'][:max_products]
+                        for p in product_list:
+                            if not p.get('sponsored', False) and p.get('asin') and p.get('title'):
+                                url = p.get('url', '')
+                                if url:
+                                    try:
+                                        url = fix_product_url(url)
+                                    except Exception:
+                                        pass
+                                products.append(ProductItem(
+                                    name=p.get('title', 'Unknown'),
+                                    price=p.get('price'),
+                                    rating=p.get('rating'),
+                                    url=url
+                                ))
+                        if products:
+                            logger.info(f"Successfully extracted {len(products)} products from action results")
+                            break  # Use first successful extraction
+                except Exception as e:
+                    logger.debug(f"Failed to parse products from action result {idx}: {e}")
+                    import traceback
+                    logger.debug(traceback.format_exc())
+                    continue
+    
+    # Limit to max_products
+    products = products[:max_products]
+    
+    if products:
+        result = ProductListResult(
+            success=True,
+            products=products,
+            count=len(products),
+            message=f"Found {len(products)} products matching the criteria"
+        )
+        logger.info(f"✅ Successfully extracted {len(products)} products")
+    else:
+        result = ProductListResult(
+            success=False,
+            products=[],
+            count=0,
+            message="No products found matching the criteria"
+        )
+        logger.warning("❌ No products extracted")
     
     return result 

@@ -96,3 +96,11 @@ class CartResult(BaseModel):
     success: bool = Field(default=True, description="Whether the operation was successful")
     message: Optional[str] = Field(default=None, description="Optional message about the result")
     product: Optional[ProductItem] = Field(default=None, description="The product that was added to cart")
+
+
+class ProductListResult(BaseModel):
+    """Result of listing filtered products."""
+    products: List[ProductItem] = Field(default_factory=list, description="List of products that match the criteria")
+    success: bool = Field(default=True, description="Whether the operation was successful")
+    message: Optional[str] = Field(default=None, description="Optional message about the result")
+    count: int = Field(default=0, description="Number of products found")
