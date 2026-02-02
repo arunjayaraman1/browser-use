@@ -1,0 +1,107 @@
+Feature: Sandbox Static Page UI Validation
+
+Background:
+  Given I navigate to "https://nat-studio-pfizer.genai-newpage.com/sandbox-static"
+  Then I see the heading "Sandbox Static Page"
+
+Scenario: Buttons are idle before interaction
+  Given I am on the main page
+  Then I do not see the text "✓ Button Clicked!"
+  And I do not see the text "✓ Center Button Activated!"
+  And I do not see the text "Button state changed!"
+  And I do not see the text "Both buttons are now active!"
+
+Scenario: Click Me button shows its status and banner
+  When I click the button "Click Me"
+  Then I see the text "✓ Button Clicked!"
+  And I see the text "Button state changed!"
+
+Scenario: Center Aligned Button shows its status and banner
+  When I click the button "Center Aligned Button"
+  Then I see the text "✓ Center Button Activated!"
+  And I see the text "Button state changed!"
+
+Scenario: Both buttons active shows combined banner
+  Given I click the button "Click Me"
+  And I click the button "Center Aligned Button"
+  Then I see the text "✓ Button Clicked!"
+  And I see the text "✓ Center Button Activated!"
+  And I see the text "Button state changed! Both buttons are now active!"
+
+Scenario: Dropdown opens and lists options
+  When I open the dropdown
+  Then I see the option "Choose an option..."
+  And I see the option "Option 1"
+  And I see the option "Option 2"
+  And I see the option "Option 3"
+
+Scenario: Selecting an option from the dropdown
+  Given I open the dropdown
+  When I select "Option 2"
+  Then I see the selected value "Option 2"
+
+Scenario: Closing dropdown without selection retains default
+  Given I open the dropdown
+  When I close the dropdown without selecting an option
+  Then I see the selected value "Choose an option..."
+
+Scenario: Contact Us link navigates to contact page and back
+  When I click the link "Contact Us"
+  Then I see the heading "Contact Us"
+  And I see the link "Back"
+  When I click the link "Back"
+  Then I see the heading "Sign Up Form"
+
+Scenario: Link For Break navigates away from the sandbox page
+  When I click the link "Link For Break"
+  Then I do not see the text "Sandbox Static Page"
+
+Scenario: Sign Up form shows required errors for missing Middle Name and Email
+  Given I am on the main page
+  And I type "Alice" into the field "First Name"
+  And I type "Johnson" into the field "Last Name"
+  And I leave the field "Middle Name" empty
+  And I leave the field "Email Address" empty
+  When I click the button "Sign Up"
+  Then I see the error message "Middle name is required"
+  And I see the error message "Email is required"
+
+Scenario: Sign Up form with valid inputs hides required errors
+  Given I am on the main page
+  And I type "Alice" into the field "First Name"
+  And I type "Johnson" into the field "Last Name"
+  And I type "Marie" into the field "Middle Name"
+  And I type "alice.johnson@example.com" into the field "Email Address"
+  When I click the button "Sign Up"
+  Then I do not see the text "Middle name is required"
+  And I do not see the text "Email is required"
+
+Scenario: Registration form shows required errors when submitted empty
+  Given I am on the main page
+  And I clear the field "First Name" in Registration Form
+  And I clear the field "Last Name" in Registration Form
+  And I clear the field "state" in Registration Form
+  And I clear the field "Email Address" in Registration Form
+  When I click the button "Register"
+  Then I see the error message "First name is required"
+  And I see the error message "Last name is required"
+  And I see the error message "state is required"
+  And I see the error message "Email is required"
+
+Scenario: Registration form shows invalid email error
+  Given I am on the main page
+  And I type "John" into the field "First Name" in Registration Form
+  And I type "Doe" into the field "Last Name" in Registration Form
+  And I type "California" into the field "state" in Registration Form
+  And I type "john.doe" into the field "Email Address" in Registration Form
+  When I click the button "Register"
+  Then I see the error message "Invalid email format"
+
+Scenario: Registration form successful submission shows success banner
+  Given I am on the main page
+  And I type "John" into the field "First Name" in Registration Form
+  And I type "Doe" into the field "Last Name" in Registration Form
+  And I type "California" into the field "state" in Registration Form
+  And I type "john.doe@example.com" into the field "Email Address" in Registration Form
+  When I click the button "Register"
+  Then I see the notification "Registration successful! Your account has been registered."
