@@ -1,0 +1,130 @@
+Feature: Validate visible behaviors and messages on Sandbox Static Page
+
+Background:
+  Given the user opens https://nat-studio-pfizer.genai-newpage.com/sandbox-static
+  And the page header reads "Sandbox Static Page"
+  And the introductory paragraph reads "This page contains various UI elements including forms, dropdowns, buttons, images, and icons for testing purposes."
+
+# Dropdown: Select an Option
+Scenario: Dropdown shows default prompt with no selection line
+  When the user views the dropdown labeled "Select an Option"
+  Then the dropdown control shows "Choose an option..."
+  And no separate selection line is visible near the dropdown
+
+Scenario: Open and close dropdown without selecting
+  Given the dropdown control shows "Choose an option..."
+  When the user opens the dropdown and closes it without choosing
+  Then the dropdown control still shows "Choose an option..."
+  And no separate selection line is visible near the dropdown
+
+Scenario: Select Option 1 and verify selected line
+  When the user selects "Option 1" from the dropdown
+  Then a line near the dropdown shows "Selected: option1"
+
+Scenario: Select Option 2 and verify selected line
+  When the user selects "Option 2" from the dropdown
+  Then a line near the dropdown shows "Selected: option2"
+
+Scenario: Select Option 3 and verify selected line
+  When the user selects "Option 3" from the dropdown
+  Then a line near the dropdown shows "Selected: option3"
+
+Scenario: Select Option 4 and verify selected line
+  When the user selects "Option 4" from the dropdown
+  Then a line near the dropdown shows "Selected: option4"
+
+Scenario: Select Option 5 and verify selected line
+  When the user selects "Option 5" from the dropdown
+  Then a line near the dropdown shows "Selected: option5"
+
+# Buttons and Notifications
+Scenario: No notifications before any button is clicked
+  Given the buttons show "Click Me" and "Center Aligned Button"
+  Then no notification banner is visible
+
+Scenario: Click the primary button and see its notification only
+  When the user clicks the button labeled "Click Me"
+  Then the button label changes to "✓ Button Clicked!"
+  And the notification "✓ Button Clicked!" is visible
+  And the notification "✓ Center Button Activated!" is not visible
+  And the banner "Button state changed! Both buttons are now active!" is not visible
+
+Scenario: Click the center aligned button and see its notification only
+  When the user clicks the button labeled "Center Aligned Button"
+  Then the button label changes to "✓ Center Button Activated!"
+  And the notification "✓ Center Button Activated!" is visible
+  And the notification "✓ Button Clicked!" is not visible
+  And the banner "Button state changed! Both buttons are now active!" is not visible
+
+Scenario: Click both buttons and see combined banner
+  Given the button labeled "Click Me" is clicked until it shows "✓ Button Clicked!"
+  And the button labeled "Center Aligned Button" is clicked until it shows "✓ Center Button Activated!"
+  Then the notification "✓ Button Clicked!" is visible
+  And the notification "✓ Center Button Activated!" is visible
+  And the banner "Button state changed! Both buttons are now active!" is visible
+
+# Links: validate destination URLs only
+Scenario: Contact Us link navigates to the expected URL
+  When the user clicks the link "Contact Us"
+  Then the browser navigates to "https://nat-studio-pfizer.genai-newpage.com/contact-us"
+
+Scenario: Link For Break navigates to the expected URL
+  When the user clicks the link "Link For Break"
+  Then the browser navigates to "https://nat-studio-dev.genai-newpage.com/sandbox-dynamic"
+
+Scenario: Submit empty Sign Up Form to see all required errors
+  Given the form header reads "Sign Up Form"
+  When the user clicks "Sign Up"
+  Then the inline error under First Name reads "First name is required"
+  And the inline error under Last Name reads "Last name is required"
+  And the inline error under Middle Name reads "Middle name is required"
+  And the inline error under Email Address reads "Email is required"
+
+Scenario: Clear First Name error by entering a value
+  Given the Sign Up Form shows "First name is required" under First Name
+  When the user enters a non-empty value in First Name
+  Then no inline validation error is visible under First Name
+
+Scenario: Clear Last Name error by entering a value
+  Given the Sign Up Form shows "Last name is required" under Last Name
+  When the user enters a non-empty value in Last Name
+  Then no inline validation error is visible under Last Name
+
+Scenario: Clear Middle Name error by entering a value
+  Given the Sign Up Form shows "Middle name is required" under Middle Name
+  When the user enters a non-empty value in Middle Name
+  Then no inline validation error is visible under Middle Name
+
+Scenario: Clear Email Address error by entering a value
+  Given the Sign Up Form shows "Email is required" under Email Address
+  When the user enters a non-empty value in Email Address
+  Then no inline validation error is visible under Email Address
+
+# Registration Form validations
+Scenario: Submit empty Registration Form to see all required errors
+  Given the form header reads "Registration Form"
+  When the user clicks "Register"
+  Then the inline error under First Name reads "First name is required"
+  And the inline error under Last Name reads "Last name is required"
+  And the inline error under state reads "state is required"
+  And the inline error under Email Address reads "Email is required"
+
+Scenario: Clear Registration First Name error by entering a value
+  Given the Registration Form shows "First name is required" under First Name
+  When the user enters a non-empty value in First Name
+  Then no inline validation error is visible under First Name
+
+Scenario: Clear Registration Last Name error by entering a value
+  Given the Registration Form shows "Last name is required" under Last Name
+  When the user enters a non-empty value in Last Name
+  Then no inline validation error is visible under Last Name
+
+Scenario: Clear Registration state error by entering a value
+  Given the Registration Form shows "state is required" under state
+  When the user enters a non-empty value in state
+  Then no inline validation error is visible under state
+
+Scenario: Clear Registration Email Address error by entering a value
+  Given the Registration Form shows "Email is required" under Email Address
+  When the user enters a non-empty value in Email Address
+  Then no inline validation error is visible under Email Address

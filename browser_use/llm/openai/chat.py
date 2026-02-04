@@ -246,16 +246,29 @@ class ChatOpenAI(BaseChatModel):
 						**model_params,
 					)
 
-				if response.choices[0].message.content is None:
+				# if response.choices[0].message.content is None:
+				# 	raise ModelProviderError(
+				# 		message='Failed to parse structured output from model response',
+				# 		status_code=500,
+				# 		model=self.name,
+				# 	)
+
+				# usage = self._get_usage(response)
+
+				# parsed = output_format.model_validate_json(response.choices[0].message.content)
+
+				content = response.choices[0].message.content
+				if content is None or (isinstance(content, str) and not content.strip()):
 					raise ModelProviderError(
-						message='Failed to parse structured output from model response',
+						message='Model returned empty response (no content). Try again or check rate limits.',
 						status_code=500,
 						model=self.name,
 					)
 
 				usage = self._get_usage(response)
 
-				parsed = output_format.model_validate_json(response.choices[0].message.content)
+				parsed = output_format.model_validate_json(content)
+
 
 				return ChatInvokeCompletion(
 					completion=parsed,

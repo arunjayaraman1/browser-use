@@ -15,7 +15,7 @@ from browser_use.dom.views import (
 	SimplifiedNode,
 )
 
-DISABLED_ELEMENTS = {'style', 'script', 'head', 'meta', 'link', 'title'}
+DISABLED_ELEMENTS = {'style', 'script', 'meta', 'link',} # head and title is not disabled because it is used to get the page title
 
 # SVG child elements to skip (decorative only, no interaction value)
 SVG_ELEMENTS = {

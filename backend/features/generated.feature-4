@@ -1,0 +1,204 @@
+Feature: Validate visible user interactions on the Sandbox Static Page
+
+  Background:
+    Given the user opens the Sandbox Static Page
+    And the page title "Sandbox Static Page" is visible
+    And the text "This page contains various UI elements including forms, dropdowns, buttons, images, and icons for testing purposes." is visible
+
+  # 1) Dropdown / Select Menu
+  Scenario: Dropdown displays placeholder before selection
+    When the user views the dropdown labeled "Select an Option"
+    Then the dropdown shows placeholder text "Choose an option..."
+
+  Scenario Outline: Select each available option from the dropdown
+    Given the dropdown labeled "Select an Option" is opened
+    When the user selects "<option>"
+    Then the dropdown displays the selected option text "<option>"
+
+    Examples:
+      | option   |
+      | Option 1 |
+      | Option 2 |
+      | Option 3 |
+      | Option 4 |
+      | Option 5 |
+
+  Scenario: Close dropdown without making a selection
+    Given the dropdown labeled "Select an Option" is opened
+    When the user closes the dropdown without choosing any option
+    Then the dropdown shows placeholder text "Choose an option..."
+
+  # 2) Forms and Input Fields
+  # Sign Up Form
+  Scenario: Sign Up Form fields are visible with placeholders
+    Then the "Sign Up Form" section is visible
+    And the field label "First Name" is visible with placeholder "Enter your first name"
+    And the field label "Last Name" is visible with placeholder "Enter your last name"
+    And the field label "Middle Name" is visible with placeholder "Enter your Middle name"
+    And the field label "Email Address" is visible with placeholder "Enter your email"
+    And the button "Sign Up" is visible
+
+  Scenario Outline: Enter text variations in Sign Up Form text fields
+    Given the "Sign Up Form" is visible
+    When the user types <input_type> into the "First Name" field
+    And the user types <input_type> into the "Last Name" field
+    And the user types <input_type> into the "Middle Name" field
+    Then the typed content is visible in each corresponding field
+
+    Examples:
+      | input_type            |
+      | valid text           |
+      | extremely long text  |
+      | special characters   |
+
+  Scenario Outline: Enter email format variations in Sign Up Form
+    Given the "Sign Up Form" is visible
+    When the user types <email_type> into the "Email Address" field
+    Then the typed content is visible in the "Email Address" field
+
+    Examples:
+      | email_type             |
+      | a valid email format   |
+      | missing @              |
+      | missing domain         |
+      | multiple @ symbols     |
+      | empty input            |
+
+  Scenario: Attempt to submit Sign Up Form with all fields empty
+    Given the "Sign Up Form" is visible
+    When the user clicks the "Sign Up" button
+    Then the "Sign Up Form" remains visible
+    And no new notification message is visible in the Notifications section
+
+  Scenario: Submit Sign Up Form after providing entries
+    Given the "Sign Up Form" is visible
+    And the user types valid text into the "First Name" field
+    And the user types valid text into the "Last Name" field
+    And the user types valid text into the "Middle Name" field
+    And the user types a valid email format into the "Email Address" field
+    When the user clicks the "Sign Up" button
+    Then the page remains on the Sandbox Static Page
+    And if a visible notification appears, it is visible in the Notifications section
+
+  Scenario: Submit Sign Up Form with an invalid email format
+    Given the "Sign Up Form" is visible
+    And the user types valid text into the "First Name" field
+    And the user types valid text into the "Last Name" field
+    And the user types valid text into the "Middle Name" field
+    And the user types an invalid email format into the "Email Address" field
+    When the user clicks the "Sign Up" button
+    Then the "Sign Up Form" remains visible
+    And no specific validation text is asserted unless visibly shown
+
+  # Registration Form
+  Scenario: Registration Form fields are visible with placeholders
+    Then the "Registration Form" section is visible
+    And the field label "First Name" is visible with placeholder "Enter your first name"
+    And the field label "Last Name" is visible with placeholder "Enter your last name"
+    And the field label "state" is visible with placeholder "Enter your state"
+    And the field label "Email Address" is visible with placeholder "Enter your email"
+    And the button "Register" is visible
+
+  Scenario Outline: Enter text variations in Registration Form text fields
+    Given the "Registration Form" is visible
+    When the user types <input_type> into the "First Name" field
+    And the user types <input_type> into the "Last Name" field
+    And the user types <input_type> into the "state" field
+    Then the typed content is visible in each corresponding field
+
+    Examples:
+      | input_type            |
+      | valid text           |
+      | extremely long text  |
+      | special characters   |
+
+  Scenario Outline: Enter email format variations in Registration Form
+    Given the "Registration Form" is visible
+    When the user types <email_type> into the "Email Address" field
+    Then the typed content is visible in the "Email Address" field
+
+    Examples:
+      | email_type             |
+      | a valid email format   |
+      | missing @              |
+      | missing domain         |
+      | multiple @ symbols     |
+      | empty input            |
+
+  Scenario: Attempt to submit Registration Form with all fields empty
+    Given the "Registration Form" is visible
+    When the user clicks the "Register" button
+    Then the "Registration Form" remains visible
+    And no new notification message is visible in the Notifications section
+
+  Scenario: Submit Registration Form after providing entries
+    Given the "Registration Form" is visible
+    And the user types valid text into the "First Name" field
+    And the user types valid text into the "Last Name" field
+    And the user types valid text into the "state" field
+    And the user types a valid email format into the "Email Address" field
+    When the user clicks the "Register" button
+    Then the page remains on the Sandbox Static Page
+    And if a visible notification appears, it is visible in the Notifications section
+
+  Scenario: Submit Registration Form with an invalid email format
+    Given the "Registration Form" is visible
+    And the user types valid text into the "First Name" field
+    And the user types valid text into the "Last Name" field
+    And the user types valid text into the "state" field
+    And the user types an invalid email format into the "Email Address" field
+    When the user clicks the "Register" button
+    Then the "Registration Form" remains visible
+    And no specific validation text is asserted unless visibly shown
+
+  # 3) Buttons / CTAs (non-form)
+  Scenario: Click the "Click Me" button
+    Given the "Click Me" button is visible
+    When the user clicks the "Click Me" button
+    Then the page heading "Sandbox Static Page" remains visible
+    And if a visible notification appears, it is visible in the Notifications section
+
+  Scenario: Click the "Center Aligned Button"
+    Given the "Center Aligned Button" is visible
+    When the user clicks the "Center Aligned Button"
+    Then the page heading "Sandbox Static Page" remains visible
+    And if a visible notification appears, it is visible in the Notifications section
+
+  # 4) Navigation Menus / Links
+  Scenario: On-page links are visible
+    Then the link text "Contact Us" is visible
+    And the link text "Link For Break" is visible
+
+  Scenario: Click the on-page link "Contact Us"
+    Given the link text "Contact Us" is visible
+    When the user clicks the link text "Contact Us"
+    Then a page or section with visible content is displayed
+
+  Scenario: Click the on-page link "Link For Break"
+    Given the link text "Link For Break" is visible
+    When the user clicks the link text "Link For Break"
+    Then a page or section with visible content is displayed
+
+  Scenario: Open and close the slide-out Menu
+    Given the Menu control is visible
+    When the user opens the Menu
+    Then the Menu shows the items "Contact Us", "About", and "Support"
+    When the user closes the Menu
+    Then the Menu items are no longer visible
+
+  Scenario Outline: Navigate via each Menu item
+    Given the Menu control is visible
+    And the user opens the Menu
+    When the user clicks the Menu item "<menu_item>"
+    Then a page or section with visible content is displayed
+
+    Examples:
+      | menu_item  |
+      | Contact Us |
+      | About      |
+      | Support    |
+
+  # 6) Notifications / Alerts / Banners
+  Scenario: Notifications section visibility
+    Then the Notifications section is visible
+    And no notification message is visible by default

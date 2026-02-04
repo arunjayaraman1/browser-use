@@ -1,0 +1,133 @@
+Feature: Validate UI behavior on Sandbox Static Page
+
+Background:
+  Given I navigate to "https://nat-studio-pfizer.genai-newpage.com/sandbox-static"
+
+Scenario: Toggle the Menu and verify visible items
+  When I click "Menu"
+  Then I see the menu item "Contact Us"
+  And I see the menu item "About"
+  And I see the menu item "Support"
+  When I click "Menu"
+  Then the menu is closed
+
+Scenario: Click Me button shows banner text
+  When I click "Click Me"
+  Then I see the notification "✓ Button Clicked!"
+  And I see the banner "Button state changed!"
+
+Scenario: Center Aligned Button shows activation text
+  When I click "Center Aligned Button"
+  Then I see the notification "✓ Center Button Activated!"
+  And I see the banner "Button state changed!"
+
+Scenario: Both buttons clicked show combined state banner
+  When I click "Click Me"
+  And I click "Center Aligned Button"
+  Then I see the banner "Button state changed! Both buttons are now active!"
+
+Scenario: Open dropdown and verify all available options
+  When I open the "Select an Option" dropdown
+  Then I see the option "Choose an option..."
+  And I see the option "Option 1"
+  And I see the option "Option 2"
+  And I see the option "Option 3"
+  And I see the option "Option 4"
+  And I see the option "Option 5"
+
+Scenario: Select Option 1 and verify selected text
+  When I open the "Select an Option" dropdown
+  And I select "Option 1"
+  Then I see the text "Selected: option1"
+
+Scenario: Select Option 2 and verify selected text
+  When I open the "Select an Option" dropdown
+  And I select "Option 2"
+  Then I see the text "Selected: option2"
+
+Scenario: Select Option 3 and verify selected text
+  When I open the "Select an Option" dropdown
+  And I select "Option 3"
+  Then I see the text "Selected: option3"
+
+Scenario: Select Option 4 and verify selected text
+  When I open the "Select an Option" dropdown
+  And I select "Option 4"
+  Then I see the text "Selected: option4"
+
+Scenario: Select Option 5 and verify selected text
+  When I open the "Select an Option" dropdown
+  And I select "Option 5"
+  Then I see the text "Selected: option5"
+
+Scenario: Set dropdown back to default and verify placeholder
+  When I open the "Select an Option" dropdown
+  And I select "Choose an option..."
+  Then I see the dropdown value "Choose an option..."
+
+Scenario: Contact Us link navigates correctly and back
+  When I click "Contact Us"
+  Then I navigate to "https://nat-studio-pfizer.genai-newpage.com/contact-us"
+  When I click "Back"
+  Then I navigate to "https://nat-studio-pfizer.genai-newpage.com/sandbox-static"
+
+Scenario: About link in Menu navigates correctly and back
+  When I click "Menu"
+  And I click "About"
+  Then I navigate to "https://nat-studio-pfizer.genai-newpage.com/about"
+
+Scenario: Support link in Menu navigates correctly and back
+  When I click "Menu"
+  And I click "Support"
+  Then I navigate to "https://nat-studio-pfizer.genai-newpage.com/support"
+
+Scenario: Link For Break navigates to the dev sandbox URL
+  When I click "Link For Break"
+  Then I navigate to "https://nat-studio-dev.genai-newpage.com/sandbox-dynamic"
+
+Scenario: Sign Up form shows required field errors on empty submission
+  When I click "Sign Up"
+  Then I see the error message "First name is required"
+  And I see the error message "Last name is required"
+  And I see the error message "Middle name is required"
+  And I see the error message "Email is required"
+
+Scenario: Sign Up form shows invalid email format error
+  When I type "John" into "First Name"
+  And I type "Doe" into "Last Name"
+  And I type "Allen" into "Middle Name"
+  And I type "abc" into "Email Address"
+  And I click "Sign Up"
+  Then I see the error message "Invalid email format"
+
+Scenario: Sign Up form submits successfully
+  When I type "John" into "First Name"
+  And I type "Doe" into "Last Name"
+  And I type "Allen" into "Middle Name"
+  And I type "john.doe@example.com" into "Email Address"
+  And I click "Sign Up"
+  Then I see the notification "Sign up successful! Your account has been created."
+
+Scenario: Registration form shows required field errors on empty submission
+  When I click "Register"
+  Then I see the error message "First name is required"
+  And I see the error message "Last name is required"
+  And I see the error message "state is required"
+  And I see the error message "Email is required"
+
+Scenario: Registration form shows invalid email and invalid state errors
+  When I type "Jane" into "First Name"
+  And I type "Smith" into "Last Name"
+  And I type "New York" into "state"
+  And I type "abc" into "Email Address"
+  And I click "Register"
+  Then I see the error message "state should contain only alphabets"
+  And I see the error message "Invalid email format"
+
+Scenario: Registration form submits successfully
+  When I type "Alice" into "First Name"
+  And I type "Brown" into "Last Name"
+  And I type "California" into "state"
+  And I type "alice.brown@example.com" into "Email Address"
+  And I click "Register"
+  Then I see the notification "Registration successful! Your account has been registered."

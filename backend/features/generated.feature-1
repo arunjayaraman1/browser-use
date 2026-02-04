@@ -1,0 +1,78 @@
+Feature: Sandbox Static Page UI Interactions
+
+Background:
+  Given I am on the URL "https://nat-studio-pfizer.genai-newpage.com/sandbox-static"
+
+# Menu Scenarios
+Scenario: Open and close the menu to view menu items
+  When I click the button labeled "Menu"
+  Then I should see menu items:
+    | "Contact Us" |
+    | "About" |
+    | "Support" |
+  And each menu item should link to its respective URL:
+    | "/contact-us" |
+    | "/about" |
+    | "/support" |
+  When I click the button labeled with aria-label="Close menu"
+  Then the menu should be closed
+
+# Button Scenarios
+Scenario: Click the button labeled "Click Me"
+  When I click the button labeled "Click Me"
+  Then no notification or banner text should appear
+
+Scenario: Click the center aligned button labeled "✓ Center Button Activated!"
+  When I click the button labeled "✓ Center Button Activated!"
+  Then I should see a banner with text exactly "Button state changed!"
+
+# Dropdown Scenarios
+Scenario Outline: Select each option in the dropdown labeled "Select an Option"
+  When I select option "<option>" from dropdown labeled "Select an Option"
+  Then no visible result text should appear indicating selection
+
+Examples:
+| option             |
+| Choose an option... |
+| Option 1           |
+| Option 2           |
+| Option 3           |
+| Option 4           |
+| Option 5           |
+
+# Links Scenarios
+Scenario: Verify link hrefs without clicking external links
+  Then link labeled "Contact Us" should have href "/contact-us"
+  And link labeled "Link For Break" should have href "https://nat-studio-dev.genai-newpage.com/sandbox-dynamic"
+
+# Sign Up Form Scenarios
+Scenario: Submit empty Sign Up form to capture validation errors
+  When I submit the form named "Sign Up Form" without filling any fields
+  Then I should see validation error messages for all required fields exactly as shown on UI
+
+Scenario: Submit Sign Up form with invalid email format
+  When I fill in field labeled "Email Address" in form named "Sign Up Form" with invalid email value "invalid-email"
+   And I fill other required fields with valid data in form named "Sign Up Form"
+   And I submit the form named "Sign Up Form"
+   Then I should see an email validation error message exactly as shown on UI
+
+Scenario: Submit Sign Up form with valid data successfully
+  When I fill in all required fields in form named "Sign Up Form" with valid data including a valid email address
+   And I submit the form named "Sign Up Form"
+   Then I should see a success message exactly as shown on UI after submission
+
+# Registration Form Scenarios
+Scenario: Submit empty Registration form to capture validation errors
+  When I submit the form named "Registration Form" without filling any fields
+  Then I should see validation error messages for all required fields exactly as shown on UI
+
+Scenario: Submit Registration form with invalid email format
+  When I fill in field labeled "Email Address" in form named "Registration Form" with invalid email value "invalid-email"
+   And I fill other required fields with valid data in form named "Registration Form"
+   And I submit the form named "Registration Form"
+   Then I should see an email validation error message exactly as shown on UI
+
+Scenario: Submit Registration form with valid data successfully
+  When I fill in all required fields in form named "Registration Form" with valid data including a valid email address
+   And I submit the form named "Registration Form"
+   Then I should see a success message exactly as shown on UI after submission

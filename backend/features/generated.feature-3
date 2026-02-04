@@ -1,0 +1,129 @@
+Feature: Sandbox Static Page UI Validation
+
+Background:
+  Given I navigate to "https://nat-studio-pfizer.genai-newpage.com/sandbox-static"
+  And the page titled "Sandbox Static Page" is displayed
+
+Scenario: Menu open/close and navigation
+  When I open the Menu
+  Then I see the following items in the Menu:
+    | item       |
+    | Contact Us |
+    | About      |
+    | Support    |
+  When I click "Contact Us" in the Menu
+  Then a page is displayed
+  And I navigate back to the Sandbox Static Page
+  When I open the Menu
+  And I click "About" in the Menu
+  Then a page is displayed
+  And I navigate back to the Sandbox Static Page
+  When I open the Menu
+  And I click "Support" in the Menu
+  Then a page is displayed
+  And I navigate back to the Sandbox Static Page
+  When I open the Menu
+  And I close the Menu
+  Then the Menu is not visible
+
+Scenario: Dropdown selection behavior
+  Given the control labeled "Select an Option" is visible
+  Then I see the dropdown placeholder "Choose an option..."
+  When I open the dropdown
+  Then I see the following options:
+    | option    |
+    | Option 1  |
+    | Option 2  |
+    | Option 3  |
+    | Option 4  |
+    | Option 5  |
+  When I select "Option 1"
+  Then the dropdown displays "Option 1"
+  When I select "Option 2"
+  Then the dropdown displays "Option 2"
+  When I select "Option 3"
+  Then the dropdown displays "Option 3"
+  When I select "Option 4"
+  Then the dropdown displays "Option 4"
+  When I select "Option 5"
+  Then the dropdown displays "Option 5"
+  When I open the dropdown and close it without a new selection
+  Then the previously selected option remains displayed
+
+Scenario: Button behavior and informational banner
+  Given the left button is visible
+  And the center button is visible
+  When I click the left button
+  Then the left button label becomes "✓ Button Clicked!"
+  When I click the center button
+  Then the center button label becomes "✓ Center Button Activated!"
+  Then a message banner is displayed with text "Button state changed! Both buttons are now active!"
+
+Scenario: Page links navigation
+  Given the link "Contact Us" is visible on the page
+  When I click the link "Contact Us"
+  Then a page is displayed
+  And I navigate back to the Sandbox Static Page
+  Given the link "Link For Break" is visible on the page
+  When I click the link "Link For Break"
+  Then a page is displayed
+  And I navigate back to the Sandbox Static Page
+
+Scenario: Sign Up Form - empty submission validation messages
+  Given the "Sign Up Form" is visible
+  And the "First Name" field is empty
+  And the "Last Name" field is empty
+  And the "Middle Name" field is empty
+  And the "Email Address" field is empty
+  When I click "Sign Up"
+  Then the message "First name is required" is displayed near the First Name field
+  And the message "Last name is required" is displayed near the Last Name field
+  And the message "Middle name is required" is displayed near the Middle Name field
+  And the message "Email is required" is displayed near the Email Address field
+
+Scenario: Sign Up Form - text field input behaviors
+  Given the "Sign Up Form" is visible
+  When I enter "John" into the "First Name" field
+  Then the "First Name" field displays "John"
+  When I enter a very long text of 300 characters into the "First Name" field
+  Then the "First Name" field displays the entered text
+  When I enter "Doe" into the "Last Name" field
+  Then the "Last Name" field displays "Doe"
+  When I enter "!@#$%^&*()_+" into the "Last Name" field
+  Then the "Last Name" field displays "!@#$%^&*()_+"
+  When I enter "Alan" into the "Middle Name" field
+  Then the "Middle Name" field displays "Alan"
+  When I enter "A name with multiple words" into the "Middle Name" field
+  Then the "Middle Name" field displays "A name with multiple words"
+
+Scenario: Sign Up Form - email field input behaviors
+  Given the "Sign Up Form" is visible
+  When I enter "user@example.com" into the "Email Address" field
+  Then the "Email Address" field displays "user@example.com"
+  When I clear the "Email Address" field and enter "userexample.com"
+  Then the "Email Address" field displays "userexample.com"
+  When I clear the "Email Address" field and enter "user@@example.com"
+  Then the "Email Address" field displays "user@@example.com"
+  When I clear the "Email Address" field and leave it empty
+  Then the "Email Address" field is empty
+
+Scenario: Registration Form - field visibility and input behaviors
+  Given the "Registration Form" is visible
+  And the "First Name" field is visible
+  And the "Last Name" field is visible
+  And the "state" field is visible
+  And the "Email Address" field is visible
+  When I enter "Jane" into the "First Name" field in the Registration Form
+  Then the "First Name" field in the Registration Form displays "Jane"
+  When I enter a very long text of 300 characters into the "Last Name" field in the Registration Form
+  Then the "Last Name" field in the Registration Form displays the entered text
+  When I enter "California" into the "state" field in the Registration Form
+  Then the "state" field in the Registration Form displays "California"
+  When I enter "!@# test" into the "state" field in the Registration Form
+  Then the "state" field in the Registration Form displays "!@# test"
+  When I enter "reg@example.com" into the "Email Address" field in the Registration Form
+  Then the "Email Address" field in the Registration Form displays "reg@example.com"
+  When I clear the "Email Address" field in the Registration Form and enter "regexample.com"
+  Then the "Email Address" field in the Registration Form displays "regexample.com"
+  When I clear the "Email Address" field in the Registration Form
+  Then the "Email Address" field in the Registration Form is empty
