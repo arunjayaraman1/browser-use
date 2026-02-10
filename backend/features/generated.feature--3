@@ -1,0 +1,82 @@
+Feature: Validate all navigation links
+
+Background:
+  Given I am on "https://www.pfizerforall.com/"
+
+Scenario Outline: Validate direct page link navigation
+  When I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
+
+Examples:
+  | link_text                 | url_value                                                                 |
+  | Explore cancer screenings | https://www.pfizerforall.com/find-care/cancer-screening/                 |
+  | Visit GoodRx              | http://goodrx.com/go/pfizer?utm_source=pfe&exitCode=pfa                  |
+  | Explore biomarker testing | https://www.pfizerforall.com/find-care/biomarker-testing/                |
+  | Start here                | https://www.pfizerforall.com/vaccines/pneumococcal-pneumonia             |
+  | Learn why                 | https://www.pfizerforall.com/covid-19/treatment-education                |
+  | Get started               | https://www.pfizerforall.com/savings-support/prescription-assistance     |
+  | Find a provider           | https://www.pfizerforall.com/find-care/talk-to-a-doctor                  |
+  | Find out more             | https://www.pfizerforall.com/covid-19/treatment-education                |
+  | Find out more             | https://www.pfizerforall.com/migraine/treatment                          |
+  | Explore ways to save      | https://www.pfizerforall.com/savings-support/prescription-assistance     |
+  | Ask your question         | https://healthanswers.pfizer.com/?exitCode=pfa                           |
+  | Support                   | https://www.pfizerforall.com/support                                     |
+  | Visit Health Answers      | https://healthanswers.pfizer.com/welcome                                 |
+  | Visit Pfizer.com          | https://www.pfizer.com/?exitCode=pfa                                     |
+  | Terms of use              | https://www.pfizer.com/general/terms?exitCode=pfa                        |
+  | Privacy policy            | https://www.pfizer.com/privacy?exitCode=pfa                              |
+  | Cookies Preferences       | https://www.pfizerforall.com/#ot-sdk-btn                                 |
+
+Scenario Outline: Validate "Understand Your Health" dropdown link navigation
+  When I open the "Understand Your Health" menu
+  And I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
+
+Examples:
+  | link_text                 | url_value                                                     |
+  | Vaccines                  | https://www.pfizerforall.com/vaccines/                       |
+  | About Vaccines            | https://www.pfizerforall.com/vaccines/                       |
+  | COVID-19                  | https://www.pfizerforall.com/vaccines/covid-19               |
+  | Flu                       | https://www.pfizerforall.com/vaccines/flu                    |
+  | Pneumococcal pneumonia    | https://www.pfizerforall.com/vaccines/pneumococcal-pneumonia |
+  | RSV                       | https://www.pfizerforall.com/vaccines/rsv                    |
+  | Menopause                 | https://www.pfizerforall.com/menopause/                      |
+  | Migraine                  | https://www.pfizerforall.com/migraine/                       |
+  | Cancer                    | https://www.pfizerforall.com/cancer                          |
+  | ATTR-CM                   | https://www.pfizerforall.com/attr-cm/                        |
+  | COVID-19                  | https://www.pfizerforall.com/covid-19/                       |
+  | Health Information Center | https://www.pfizerforall.com/education/                      |
+
+Scenario Outline: Validate "Find the Care You Need" dropdown link navigation
+  When I open the "Find the Care You Need" menu
+  And I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
+
+Examples:
+  | link_text                    | url_value                                                     |
+  | Talk to a Healthcare Provider| https://www.pfizerforall.com/find-care/talk-to-a-doctor      |
+  | Schedule a Vaccine           | https://www.vaxassist.com/?exitCode=pfa                       |
+  | Discover Cancer Screening    | https://www.pfizerforall.com/find-care/cancer-screening/     |
+  | Explore Biomarker Testing    | https://www.pfizerforall.com/find-care/biomarker-testing/    |
+  | Prepare for Care             | https://www.pfizerforall.com/find-care/prepare-for-care      |
+
+Scenario Outline: Validate "Get Savings" dropdown link navigation
+  When I open the "Get Savings" menu
+  And I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
+
+Examples:
+  | link_text               | url_value                                                         |
+  | Get Financial Assistance| https://www.pfizerforall.com/savings-support/prescription-assistance |
+
+Scenario Outline: Validate "Explore Pfizer" dropdown link navigation
+  When I open the "Explore Pfizer" menu
+  And I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
+
+Examples:
+  | link_text              | url_value                                              |
+  | Visit Pfizer.com       | https://www.pfizer.com/?exitCode=pfa                   |
+  | Visit Health Answers   | https://healthanswers.pfizer.com/?exitCode=pfa         |
+  | Find a Clinical Trial  | https://www.pfizerclinicaltrials.com/?exitCode=pfa     |
+  | See Our Work in Cancer | https://cancer.pfizer.com/?exitCode=pfa                |

@@ -116,8 +116,19 @@ class CodeAgent:
 			except Exception as e:
 				raise RuntimeError(f'Failed to initialize CodeAgent LLM: {e}')
 
+		# Allow other LLMs that implement the BaseChatModel protocol (e.g., ChatOpenAI),
+		# but warn because CodeAgent is optimized for ChatBrowserUse.
 		if 'ChatBrowserUse' not in llm.__class__.__name__:
-			raise ValueError('This agent works only with ChatBrowserUse.')
+			required_attrs = ('ainvoke', 'model', 'provider', 'name')
+			missing_attrs = [attr for attr in required_attrs if not hasattr(llm, attr)]
+			if missing_attrs:
+				raise ValueError(
+					f'CodeAgent requires an LLM implementing BaseChatModel. Missing attributes: {missing_attrs}'
+				)
+			logger.warning(
+				'CodeAgent is optimized for ChatBrowserUse. Using %s may reduce reliability or require tighter prompts.',
+				llm.__class__.__name__,
+			)
 
 		# Handle browser vs browser_session parameter (browser takes precedence)
 		if browser and browser_session:

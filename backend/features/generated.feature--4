@@ -1,0 +1,20 @@
+Feature: Validate all navigation links
+
+Background:
+  Given I am on "https://www.tukysa.com/"
+
+Scenario Outline: Validate direct page link navigation
+  When I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
+
+Examples:
+  | link_text                    | url_value                                                     |
+  | Indication                   | https://www.tukysa.com/                                       |
+  | Important Safety Information | https://www.tukysa.com/#isi                                   |
+  | Important Facts              | https://static.webfiles.pfizer.com/TUKYSA_Important_Facts.pdf |
+  | Prescribing Information      | https://labeling.pfizer.com/ShowLabeling.aspx?id=20631        |
+  | Healthcare Professionals     | https://tukysa.pfizerpro.com/                                 |
+  | Seagen Secure®               | https://www.pfizeroncologytogether.com/                       |
+  | Enter site                   | https://www.tukysa.com/mbc                                    |
+  | Enter site                   | https://www.tukysa.com/mcrc                                   |
+  | www.fda.gov/Safety/MedWatch  | https://www.fda.gov/Safety/MedWatch                           |

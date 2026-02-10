@@ -7,8 +7,8 @@ load_dotenv()
 
 MODEL_NAME = os.getenv("MODEL_NAME") or "gpt-5"
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL") or "gpt-4.1-mini"
-# DEFAULT_URL = "https://nat-studio-pfizer.genai-newpage.com/sandbox-static"
-DEFAULT_URL = "https://www.pfizerforall.com"
+# DEFAULT_URL = "https://www.pfizerforall.com"
+DEFAULT_URL = "https://www.tukysa.com"
 
 
 AGENT_PROMPT = """
@@ -22,12 +22,12 @@ Validate navigation for:
 OUTPUT RULES (STRICT):
 - Output ONLY raw Gherkin text.
 - Do NOT use markdown, code blocks, bullet points, JSON, or explanations.
-- Use ONLY valid Gherkin keywords: Feature, Background, Scenario Outline, Given, When, Then, And, Examples.
+- Use ONLY valid Gherkin keywords: Feature, Background, Scenario Outline, Scenario, Given, When, Then, And, Examples.
 - Produce EXACTLY one Feature.
 - Always include ONE Background section with the base page URL.
-- Use Scenario Outline for link lists.
-- Use Scenario only if there is truly a single unique case.
-- Never output labels like "dropdown_name:" or "group_name:" outside tables.
+- Use Scenario Outline for multiple links.
+- Use Scenario only if there is a single unique case.
+- Never output labels outside tables.
 - Never output comments inside Examples tables.
 - Never output empty rows or mismatched columns.
 - Use plain ASCII pipe characters `|` only.
@@ -44,56 +44,81 @@ Background:
 Scenario Outline: Validate direct page link navigation
   When I click the "<link_text>" link
   Then I should be navigated to "<url_value>"
-  Then I should see the page title "<page_title>"
-  
+
 Examples:
-  | link_text | url_value | page_title |
+  | link_text | url_value |
 
 Scenario Outline: Validate dropdown link navigation
   When I open the "<dropdown_name>" menu
-  And I select the "<link_text>" link under group "<group_name>"
-  And I should be navigated to "<url_value>"
-  Then I should see the page title "<page_title>"
+  And I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
 
-Examples: if Possible Customize sections are present in the dropdown then cover all the links inside it.
-  | dropdown_name | group_name | link_text | url_value | page_title |
+Examples:
+  | dropdown_name | link_text | url_value |
 
 DATA COLLECTION RULES:
 
+WHEN TO COUNT AS SUCCESS:
+- If the page loads and shows anything (content, blank but loaded, SPA shell, etc.), treat the navigation as SUCCESS. Record the current URL and return to homepage.
+- Count as FAILURE only when: the page is clearly broken (e.g. "Page not found", "404", "Something went wrong", server error message) or there is a DNS/connection error (e.g. "Can't reach this page", "DNS_PROBE_*"). Otherwise, consider the step successful and record the url_value.
+
 DIRECT PAGE LINKS:
-- Identify every visible clickable link.
-- Click → verify navigation → go back.
-- Record link_text and full url_value.
-- Capture the carousel links from beginning to end and cover all the links inside it.
+- Identify every visible clickable link on the homepage.
+- Record link_text and full absolute url_value.
+- Capture carousel or slider links from beginning to end.
 
 DROPDOWN / MENU LINKS:
-- Open each navigation dropdown/menu (hover or click).
-- For each group/category inside it:
-  - Capture dropdown_name and group_name.
-- For each link inside each group:
-  - Click → verify navigation → go back.
-  - Record dropdown_name, group_name, link_text, url_value.
-- If a link has no group, use "None" as group_name.
-- Must check all the dropdowns and menus and cover all the links inside it.
-- Top to Bottom Checking is mandatory.
+- Open each navigation dropdown or menu (hover or click).
+- For each link inside it:
+  - Record dropdown_name, link_text, full absolute url_value.
+- Must check ALL dropdowns from top to bottom.
 
-NAVIGATION CHECK:
-- For each link: open it, then verify (1) the browser URL is correct and (2) the page <title> matches the link text and intended destination.
-- After every link check, return to the homepage before testing the next link. This is required.
-- Do not add a "back to homepage" step in the Gherkin feature file; returning home is part of the flow but is not written as a scenario step.
+NAVIGATION VALIDATION:
+- For each link verify only that the browser URL changes correctly.
+- Returning to homepage after each check is mandatory.
+- DO NOT write "navigate back" steps in Gherkin.
 
 CONSTRAINTS:
+- Success = page loaded (anything other than a broken/error page or DNS error). Do not require visible interactives or rich content.
 - Use ONLY text and URLs actually visible in the UI.
-- DO NOT invent links, names, or categories.
-- DO NOT extract or summarize destination page content .
-- ONLY confirm navigation occurred and capture the final full URL.
-- Back to Homepage is mandatory after each navigation.
-- Dont add "And I navigate back to the homepage" in the Gherkin feature file.
-- Check all the dropdowns links and cover all the links inside it.
-- Cover full Homepage top to bottom and cover all the links.
-Return ONLY the final Gherkin feature text. Nothing before or after.
+- DO NOT invent links or names.
+- DO NOT summarize destination content.
+- ONLY confirm navigation and capture final full URL.
+- Cover the entire homepage from top to bottom.
+- Return ONLY the final Gherkin feature text. Nothing before or after.
+- Strictly Open the links in the same tab.
+
 """
 
+from browser_use.llm.messages import BaseMessage, UserMessage
+
+CORRECTION_PROMPT = """Correct and clean the following Gherkin feature file. Fix syntax (matching Examples columns to steps,group scenarios outline 
+by dropdown name , no duplicate rows, valid pipes). Return ONLY the corrected raw Gherkin text, no markdown or explanation.
+
+Feature file to correct:
+
+{feature_content}
+"""
+
+
+def _get_correction_llm():
+    try:
+        from langchain_openai import ChatOpenAI as LangChainChatOpenAI
+        from examples.models.langchain.chat import ChatLangchain
+        return ChatLangchain(chat=LangChainChatOpenAI(model=MODEL_NAME, temperature=0))
+    except Exception:
+        return None
+
+
+async def correct_gherkin(gherkin: str) -> str:
+    """Send gherkin text to an LLM for correction. Returns corrected Gherkin string."""
+    llm = _get_correction_llm()
+    if llm is None:
+        return gherkin
+    prompt = CORRECTION_PROMPT.format(feature_content=gherkin)
+    messages: list[BaseMessage] = [UserMessage(content=prompt)]
+    response = await llm.ainvoke(messages)
+    return str(response.completion).strip()
 
 async def generate_gherkin(url: str):
     browser = Browser(
@@ -126,7 +151,7 @@ async def generate_gherkin(url: str):
 
         if not result or len(result.strip()) < 20:
             print("❌ No valid Gherkin generated")
-            return
+            return None
 
         result = result.strip()
 
@@ -134,18 +159,21 @@ async def generate_gherkin(url: str):
         print(result)
         print("\n============================\n")
 
+        print(asyncio.run(correct_gherkin(result)))
         # Save to file
         features_dir = os.path.join(os.path.dirname(__file__), "features")
         os.makedirs(features_dir, exist_ok=True)
 
-        feature_path = os.path.join(features_dir, "generated.feature--2")
+        feature_path = os.path.join(features_dir, "generated.feature--5")
         with open(feature_path, "w", encoding="utf-8") as f:
             f.write(result)
 
         print(f"✅ Saved to {feature_path}")
+        return result
 
     except Exception as e:
         print(f"❌ Error: {e}")
+        return None
 
     finally:
         await browser.kill()
@@ -153,4 +181,9 @@ async def generate_gherkin(url: str):
 
 if __name__ == "__main__":
     url = input("Enter the URL: ").strip() or DEFAULT_URL
-    asyncio.run(generate_gherkin(url))
+    gherkin = asyncio.run(generate_gherkin(url))
+    if gherkin is not None:
+        print("\n===== CORRECTED GHERKIN =====\n")
+        print(asyncio.run(correct_gherkin(gherkin)))
+
+        print("\n=============================\n")

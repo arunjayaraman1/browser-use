@@ -1,96 +1,73 @@
-
 import os
 import asyncio
-from browser_use import Agent, Browser, ChatOpenAI, ChatBrowserUse
+from pathlib import Path
+
+from browser_use import Agent, Browser, ChatOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5")
+MODEL_NAME = os.getenv("MODEL_NAME") or "gpt-5"
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL") or "gpt-4.1-mini"
+DEFAULT_URL = os.getenv("DEFAULT_URL", "https://www.pfizerforall.com")
+
+LINKS_TASK_PROMPT = """Go to the given URL and find every link on the page by automation: navigate, scroll, open menus/dropdowns, and select links to build the list.
+
+TASK:
+1. Navigate to the URL (use the navigate action).
+2. Find links by interacting with the page:
+   - Scroll the page (header, body, footer) so all sections are visible.
+   - Open any navigation dropdowns or menus (hover or click) to expose links inside them.
+   - For each visible link, identify it (by its index in the interactive elements or by reading the page after scrolling/opening menus). Record the link text (visible text) and the full URL (href). You may use the extract action to get link text and URL from the current view after each scroll or menu open.
+   - Cover the full page top to bottom and every dropdown/menu. Do not click links to follow them; only open menus and scroll to discover links, then record each link's text and url.
+3. Use the write_file action to save the list to a file named "links.txt". Format: one link per line as "link_text | url" (literal pipe between text and url). Each url must be a full absolute URL.
+4. When the file is written, call the done action.
+
+Output only the link list in the file. No other files. No explanations in the file."""
 
 
-async def generate_gherkin(url: str):
-    browser = Browser(
-        headless=False,
-        minimum_wait_page_load_time=3.0,
-        wait_for_network_idle_page_load_time=8.0,
-        wait_between_actions=2.0,
-    )
+async def get_links(url: str) -> Path | None:
+	backend_dir = Path(__file__).resolve().parent
+	links_path = backend_dir / "links.txt"
 
-    task = f"""
+	browser = Browser(
+		headless=False,
+		minimum_wait_page_load_time=2.0,
+		wait_for_network_idle_page_load_time=4.0,
+		wait_between_actions=0.5,
+	)
 
-    You are a Senior QA Automation Engineer specialized in Behavior-Driven Development (BDD).
+	llm = ChatOpenAI(model=MODEL_NAME, temperature=0)
 
-WEBSITE UNDER TEST:
-{url}
+	agent = Agent(
+		browser=browser,
+		llm=llm,
+		task=f"{LINKS_TASK_PROMPT}\n\nURL:\n{url}",
+		file_system_path=str(backend_dir),
+		max_steps=25,
+		llm_timeout=120,
+		step_timeout=180,
+	)
 
-OBJECTIVE:
-Analyze the entire visible UI of this website and generate ONE complete Gherkin Feature file that validates real end-user behavior with literal precision suitable for automation.
-
-──────────────── GLOBAL OUTPUT RULES (STRICT) ────────────────
-- Output ONLY raw Gherkin text.
-- DO NOT use markdown.
-- DO NOT include explanations, comments, or code blocks.
-- DO NOT mention selectors, IDs, classes, CSS, XPath, or DOM terms.
-- Write behavior exactly as a human user experiences it.
-- Avoid duplicate or redundant scenarios.
-- Every interactive UI element must have at least one scenario.
-- Include both Positive and Negative scenarios wherever applicable.
-- Use professional QA phrasing only.
-- Do Check every option in the dropdown and document the exact visible text after every action. (This is very important)
-
-- Check Only Dropdown Options and Document the exact visible text after every action. (This is very important)
-- Document the exact visible text after every action. (This is very important)
-- For Form Fields each and every field should be tested with positive and negative scenarios as separate scenarios. (This is very important)
-- All links should be clicked and Only document the url. Not navigated page UI. (This is very important)
-
-
-──────────────── FINAL OUTPUT REQUIREMENT ────────────────
-Return ONLY the final Gherkin Feature file text.
-Nothing before it.
-Nothing after it.
-No explanations.
-
-
-    """
-    primary_llm = ChatOpenAI(model=MODEL_NAME, temperature=0)
-
-    agent = Agent(
-        browser=browser,
-        llm=primary_llm,
-        task=task,
-        max_steps=200,
-        llm_timeout=180,
-        step_timeout=300,
-        max_retries=2,
-        max_failures=5,
-    )
-
-    history = await agent.run()
-    result = history.final_result()
-
-    await browser.kill()
-
-    if not result:
-        print("❌ No Gherkin generated")
-        return
-
-    print("\n===== GENERATED GHERKIN =====\n")
-    print(result)
-    print("\n============================\n")
-
-    # Optional: save to file
-    features_dir = os.path.join(os.path.dirname(__file__), "features")
-    os.makedirs(features_dir, exist_ok=True)
-    feature_path = os.path.join(features_dir, "generated.feature-6")
-    with open(feature_path, "w", encoding="utf-8") as f:
-        f.write(result)
-        print("✅ Saved to generated.feature")
+	try:
+		history = await agent.run()
+		result = history.final_result()
+		if result:
+			print("\n===== RESULT =====\n")
+			print((result or "").strip())
+			print("\n==================\n")
+		if links_path.exists():
+			print(f"✅ Links saved to {links_path}")
+			return links_path
+		print("⚠️ links.txt was not created; check agent steps.")
+		return None
+	except Exception as e:
+		print(f"❌ Error: {e}")
+		return None
+	finally:
+		await browser.kill()
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        generate_gherkin(
-            input("Enter the URL: ") or "https://nat-studio-pfizer.genai-newpage.com/sandbox-static"
-        )
-    )
+	url = input("Enter the URL: ").strip() or DEFAULT_URL
+	asyncio.run(get_links(url))

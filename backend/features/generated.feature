@@ -1,127 +1,80 @@
-Feature: Sandbox Static Page visible UI interactions
+Feature: Validate all navigation links
 
-  Background:
-    Given the user is on the Sandbox Static Page
+Background:
+  Given I am on "https://www.pfizerforall.com"
 
-  Scenario: Menu toggle visibility and toggling
-    Then the Menu button is visible
-    When the user clicks the Menu button
-    Then a menu becomes visible
-    When the user clicks the Menu button again
-    Then the menu is not visible
+Scenario Outline: Validate direct page link navigation
+  When I click the "<link_text>" link
+  Then I should be navigated to "<url_value>"
 
-  Scenario: Dropdown shows default placeholder
-    Then the Select an Option dropdown displays "Choose an option..."
+Examples:
+  | link_text                             | url_value                                                                 |
+  | Explore cancer screenings             | https://www.pfizerforall.com/find-care/cancer-screening/                  |
+  | Visit GoodRx                          | http://goodrx.com/go/pfizer?utm_source=pfe&exitCode=pfa                   |
+  | Explore biomarker testing             | https://www.pfizerforall.com/find-care/biomarker-testing/                 |
+  | Start here                            | https://www.pfizerforall.com/vaccines/pneumococcal-pneumonia              |
+  | Learn why                             | https://www.pfizerforall.com/covid-19/treatment-education                 |
+  | Get started                           | https://www.pfizerforall.com/savings-support/prescription-assistance      |
+  | Find a provider                       | https://www.pfizerforall.com/find-care/talk-to-a-doctor                   |
+  | Find out more                         | https://www.pfizerforall.com/covid-19/treatment-education                 |
+  | Find out more                         | https://www.pfizerforall.com/migraine/treatment                           |
+  | See here                              | https://www.goodrx.com/go/pfizer?exitCode=pfa                             |
+  | Learn more at GoodRx                  | http://goodrx.com/go/pfizer?utm_source=pfe&exitCode=pfa                   |
+  | Explore ways to save                  | https://www.pfizerforall.com/savings-support/prescription-assistance      |
+  | Ask your question                     | https://healthanswers.pfizer.com/?exitCode=pfa                            |
+  | Support                               | https://www.pfizerforall.com/support                                      |
+  | Visit Health Answers                  | https://healthanswers.pfizer.com/welcome                                  |
+  | Terms of use                          | https://www.pfizer.com/general/terms?exitCode=pfa                         |
+  | Privacy policy                        | https://www.pfizer.com/privacy?exitCode=pfa                               |
+  | Cookie preferences                    | https://www.pfizerforall.com/#ot-sdk-btn                                  |
+  | Privacy Policy                        | https://www.pfizer.com/privacy?exitCode=pfa                               |
+  | Washington Health Data Privacy Policy | https://www.pfizer.com/washington-health-data-privacy-policy?exitCode=pfa |
 
-  Scenario: Open and close dropdown without selection
-    When the user opens the Select an Option dropdown
-    Then the dropdown options are visible
-    When the user clicks outside the dropdown
-    Then the dropdown options are not visible
+Scenario Outline: Validate dropdown link navigation
+  When I open the "<dropdown_name>" menu
+  And I select the "<link_text>" link under group "<group_name>"
+  Then I should be navigated to "<url_value>"
 
-  Scenario Outline: Select an option from the dropdown
-    When the user opens the Select an Option dropdown
-    And the user selects "<option>"
-    Then the Select an Option dropdown displays "<option>"
+Examples: Understand Your Health
+  | dropdown_name          | group_name             | link_text                     | url_value                                                            |
+  | Understand Your Health | None                   | Vaccines                      | https://www.pfizerforall.com/vaccines/                               |
+  | Understand Your Health | None                   | COVID-19                      | https://www.pfizerforall.com/vaccines/covid-19                       |
+  | Understand Your Health | None                   | Flu                           | https://www.pfizerforall.com/vaccines/flu                            |
+  | Understand Your Health | None                   | Pneumococcal pneumonia        | https://www.pfizerforall.com/vaccines/pneumococcal-pneumonia         |
+  | Understand Your Health | None                   | RSV                           | https://www.pfizerforall.com/vaccines/rsv                            |
+  | Understand Your Health | None                   | Menopause                     | https://www.pfizerforall.com/menopause/                              |
+  | Understand Your Health | None                   | Migraine                      | https://www.pfizerforall.com/migraine/                               |
+  | Understand Your Health | None                   | Cancer                        | https://www.pfizerforall.com/cancer                                  |
+  | Understand Your Health | None                   | ATTR-CM                       | https://www.pfizerforall.com/attr-cm/                                |
+  | Understand Your Health | None                   | COVID-19                      | https://www.pfizerforall.com/covid-19/                               |
+  | Understand Your Health | None                   | Health Information Center     | https://www.pfizerforall.com/education/                              |
+  | Understand Your Health | None                   | About Vaccines                | https://www.pfizerforall.com/vaccines/                               |
 
-    Examples:
-      | option   |
-      | Option 1 |
-      | Option 2 |
-      | Option 3 |
+Examples: Find the Care You Need
+  | dropdown_name          | group_name             | link_text                     | url_value                                                            |
+  | Find the Care You Need | Understand Your Health | Talk to a Healthcare Provider | https://www.pfizerforall.com/find-care/talk-to-a-doctor              |
+  | Find the Care You Need | Understand Your Health | Schedule a Vaccine            | https://www.vaxassist.com/?exitCode=pfa                              |
+  | Find the Care You Need | Understand Your Health | Discover Cancer Screening     | https://www.pfizerforall.com/find-care/cancer-screening/             |
+  | Find the Care You Need | Understand Your Health | Explore Biomarker Testing     | https://www.pfizerforall.com/find-care/biomarker-testing/            |
+  | Find the Care You Need | Understand Your Health | Prepare for Care              | https://www.pfizerforall.com/find-care/prepare-for-care              |
+  | Find the Care You Need | None                   | Talk to a Healthcare Provider | https://www.pfizerforall.com/find-care/talk-to-a-doctor              |
+  | Find the Care You Need | None                   | Schedule a Vaccine            | https://www.vaxassist.com/?exitCode=pfa                              |
+  | Find the Care You Need | None                   | Discover Cancer Screening     | https://www.pfizerforall.com/find-care/cancer-screening/             |
+  | Find the Care You Need | None                   | Explore Biomarker Testing     | https://www.pfizerforall.com/find-care/biomarker-testing/            |
+  | Find the Care You Need | None                   | Prepare for Care              | https://www.pfizerforall.com/find-care/prepare-for-care              |
 
-  Scenario: Click primary button
-    Then the "Click Me" button is visible
-    When the user clicks the "Click Me" button
-    Then the "Click Me" button remains visible
+Examples: Get Savings
+  | dropdown_name          | group_name             | link_text                     | url_value                                                            |
+  | Get Savings            | Understand Your Health | Get Financial Assistance      | https://www.pfizerforall.com/savings-support/prescription-assistance |
+  | Get Savings            | None                   | Get Financial Assistance      | https://www.pfizerforall.com/savings-support/prescription-assistance |
 
-  Scenario: Click center aligned button
-    Then the "Center Aligned Button" button is visible
-    When the user clicks the "Center Aligned Button" button
-    Then the "Center Aligned Button" button remains visible
-
-  Scenario: Follow Contact Us link
-    Then the "Contact Us" link is visible
-    When the user clicks the "Contact Us" link
-    Then navigation starts to the link destination
-
-  Scenario: Follow Link For Break
-    Then the "Link For Break" link is visible
-    When the user clicks the "Link For Break" link
-    Then navigation starts to the link destination
-
-  Scenario: Sign Up Form accepts input values
-    Then the Sign Up Form is visible
-    And the "First Name" field with placeholder "Enter your first name" is visible in Sign Up Form
-    And the "Last Name" field with placeholder "Enter your last name" is visible in Sign Up Form
-    And the "Middle Name" field with placeholder "Enter your Middle name" is visible in Sign Up Form
-    And the "Email Address" field with placeholder "Enter your email" is visible in Sign Up Form
-    When the user types "Alice" into the "First Name" field in Sign Up Form
-    And the user types "Doe" into the "Last Name" field in Sign Up Form
-    And the user types "Q" into the "Middle Name" field in Sign Up Form
-    And the user types "alice@example.com" into the "Email Address" field in Sign Up Form
-    Then the "First Name" field value is "Alice" in Sign Up Form
-    And the "Last Name" field value is "Doe" in Sign Up Form
-    And the "Middle Name" field value is "Q" in Sign Up Form
-    And the "Email Address" field value is "alice@example.com" in Sign Up Form
-
-  Scenario: Sign Up Form clear fields shows placeholders
-    When the user clears the "First Name" field in Sign Up Form
-    And the user clears the "Last Name" field in Sign Up Form
-    And the user clears the "Middle Name" field in Sign Up Form
-    And the user clears the "Email Address" field in Sign Up Form
-    Then the "First Name" field placeholder is "Enter your first name" in Sign Up Form
-    And the "Last Name" field placeholder is "Enter your last name" in Sign Up Form
-    And the "Middle Name" field placeholder is "Enter your Middle name" in Sign Up Form
-    And the "Email Address" field placeholder is "Enter your email" in Sign Up Form
-
-  Scenario: Sign Up button clickable with empty fields
-    Then the "Sign Up" button is visible in Sign Up Form
-    When the user clicks the "Sign Up" button in Sign Up Form
-    Then the "Sign Up" button remains visible in Sign Up Form
-
-  Scenario: Sign Up button clickable with filled fields
-    When the user types "Bob" into the "First Name" field in Sign Up Form
-    And the user types "Smith" into the "Last Name" field in Sign Up Form
-    And the user types "A" into the "Middle Name" field in Sign Up Form
-    And the user types "bob@example.com" into the "Email Address" field in Sign Up Form
-    And the user clicks the "Sign Up" button in Sign Up Form
-    Then the "Sign Up" button remains visible in Sign Up Form
-
-  Scenario: Registration Form accepts input values
-    Then the Registration Form is visible
-    And the "First Name" field with placeholder "Enter your first name" is visible in Registration Form
-    And the "Last Name" field with placeholder "Enter your last name" is visible in Registration Form
-    And the "state" field with placeholder "Enter your state" is visible in Registration Form
-    And the "Email Address" field with placeholder "Enter your email" is visible in Registration Form
-    When the user types "Carol" into the "First Name" field in Registration Form
-    And the user types "Johnson" into the "Last Name" field in Registration Form
-    And the user types "NY" into the "state" field in Registration Form
-    And the user types "carol@example.com" into the "Email Address" field in Registration Form
-    Then the "First Name" field value is "Carol" in Registration Form
-    And the "Last Name" field value is "Johnson" in Registration Form
-    And the "state" field value is "NY" in Registration Form
-    And the "Email Address" field value is "carol@example.com" in Registration Form
-
-  Scenario: Registration Form clear fields shows placeholders
-    When the user clears the "First Name" field in Registration Form
-    And the user clears the "Last Name" field in Registration Form
-    And the user clears the "state" field in Registration Form
-    And the user clears the "Email Address" field in Registration Form
-    Then the "First Name" field placeholder is "Enter your first name" in Registration Form
-    And the "Last Name" field placeholder is "Enter your last name" in Registration Form
-    And the "state" field placeholder is "Enter your state" in Registration Form
-    And the "Email Address" field placeholder is "Enter your email" in Registration Form
-
-  Scenario: Register button clickable with empty fields
-    Then the "Register" button is visible in Registration Form
-    When the user clicks the "Register" button in Registration Form
-    Then the "Register" button remains visible in Registration Form
-
-  Scenario: Register button clickable with filled fields
-    When the user types "Dan" into the "First Name" field in Registration Form
-    And the user types "Lee" into the "Last Name" field in Registration Form
-    And the user types "CA" into the "state" field in Registration Form
-    And the user types "dan@example.com" into the "Email Address" field in Registration Form
-    And the user clicks the "Register" button in Registration Form
-    Then the "Register" button remains visible in Registration Form
+Examples: Explore Pfizer
+  | dropdown_name          | group_name             | link_text                     | url_value                                                            |
+  | Explore Pfizer         | Understand Your Health | Visit Pfizer.com              | https://www.pfizer.com/?exitCode=pfa                                 |
+  | Explore Pfizer         | Understand Your Health | Visit Health Answers          | https://healthanswers.pfizer.com/?exitCode=pfa                       |
+  | Explore Pfizer         | Understand Your Health | Find a Clinical Trial         | https://www.pfizerclinicaltrials.com/?exitCode=pfa                   |
+  | Explore Pfizer         | Understand Your Health | See Our Work in Cancer        | https://cancer.pfizer.com/?exitCode=pfa                              |
+  | Explore Pfizer         | None                   | Visit Pfizer.com              | https://www.pfizer.com/?exitCode=pfa                                 |
+  | Explore Pfizer         | None                   | Visit Health Answers          | https://healthanswers.pfizer.com/?exitCode=pfa                       |
+  | Explore Pfizer         | None                   | Find a Clinical Trial         | https://www.pfizerclinicaltrials.com/?exitCode=pfa                   |
+  | Explore Pfizer         | None                   | See Our Work in Cancer        | https://cancer.pfizer.com/?exitCode=pfa                              |
